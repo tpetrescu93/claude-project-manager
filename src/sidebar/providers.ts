@@ -7,7 +7,7 @@ import * as vscode from "vscode";
 import { Locators } from "../autodetect/locators";
 import { ProjectStorage } from "../storage/storage";
 import { ProjectNode, TagNode } from "./nodes";
-import { AutodetectProvider } from "./autodetectProvider";
+import { AutodetectProvider, deduplicateByRemote } from "./autodetectProvider";
 import { StorageProvider } from "./storageProvider";
 import { Container } from "../core/container";
 import { l10n } from "vscode";
@@ -128,7 +128,7 @@ export class Providers {
     public updateTreeViewDetails() {
         this.updateTreeViewStorage();
         this.vscodeTreeView.title = `VSCode (${this.locators.vscLocator.projectList.length})`;
-        this.gitTreeView.title = `Git (${this.locators.gitLocator.projectList.length})`;
+        this.gitTreeView.title = `Git (${deduplicateByRemote(this.locators.gitLocator.projectList).length})`;
         this.mercurialTreeView.title = `Mercurial (${this.locators.mercurialLocator.projectList.length})`;
         this.svnTreeView.title = `SVN (${this.locators.svnLocator.projectList.length})`;
         this.anyTreeView.title = `Any (${this.locators.anyLocator.projectList.length})`;

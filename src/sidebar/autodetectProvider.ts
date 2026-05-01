@@ -20,7 +20,7 @@ function getGitRemoteUrl(projectPath: string): string | undefined {
     }
 }
 
-function deduplicateByRemote(projects: AutodetectedProjectInfo[]): AutodetectedProjectInfo[] {
+export function deduplicateByRemote(projects: AutodetectedProjectInfo[]): AutodetectedProjectInfo[] {
     const remoteMap = new Map<string, AutodetectedProjectInfo>();
 
     for (const project of projects) {
