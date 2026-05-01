@@ -4,10 +4,40 @@
 *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from "vscode";
+import { execSync } from "child_process";
+import { AutodetectedProjectInfo } from "../autodetect/autodetectedProjectInfo";
 import { CustomProjectLocator } from "../autodetect/abstractLocator";
 import { ProjectNode } from "./nodes";
 import { Container } from "../core/container";
 import { addParentFolderToDuplicates } from "../utils/path";
+
+function getGitRemoteUrl(projectPath: string): string | undefined {
+    try {
+        return execSync("git remote get-url origin", { cwd: projectPath, timeout: 5000 })
+            .toString().trim();
+    } catch {
+        return undefined;
+    }
+}
+
+function deduplicateByRemote(projects: AutodetectedProjectInfo[]): AutodetectedProjectInfo[] {
+    const remoteMap = new Map<string, AutodetectedProjectInfo>();
+
+    for (const project of projects) {
+        const remoteUrl = getGitRemoteUrl(project.fullPath);
+        if (!remoteUrl) {
+            remoteMap.set(project.fullPath, project);
+            continue;
+        }
+
+        const existing = remoteMap.get(remoteUrl);
+        if (!existing || project.fullPath.length < existing.fullPath.length) {
+            remoteMap.set(remoteUrl, project);
+        }
+    }
+
+    return [ ...remoteMap.values() ];
+}
 
 export class AutodetectProvider implements vscode.TreeDataProvider<ProjectNode> {
 
@@ -70,7 +100,8 @@ export class AutodetectProvider implements vscode.TreeDataProvider<ProjectNode> 
                         return 0;
                     });
 
-                    const projectsWithParent = addParentFolderToDuplicates(this.projectSource.projectList);
+                    const deduplicated = deduplicateByRemote(this.projectSource.projectList);
+                    const projectsWithParent = addParentFolderToDuplicates(deduplicated);
 
                     for (let index = 0; index < projectsWithParent.length; index++) {
                         const dirinfo = projectsWithParent[ index ];
