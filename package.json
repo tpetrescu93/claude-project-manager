@@ -332,6 +332,10 @@
 			{
 				"command": "_projectManager.openSideBar",
 				"title": "%projectManager.commands.openSideBar.title%"
+			},
+			{
+				"command": "_projectManager.cloneProject",
+				"title": "%projectManager.commands.cloneProject.title%"
 			}
 		],
 		"menus": {
@@ -358,6 +362,10 @@
 				},
 				{
 					"command": "_projectManager.revealInFileManager#sideBar",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.cloneProject",
 					"when": "false"
 				},
 				{
@@ -621,6 +629,11 @@
 					"command": "_projectManager.revealInFileManager#sideBar",
 					"when": "view =~ /projectsExplorer(Favorites|VSCode|Git|SVN|Any|Mercurial)/ && viewItem == ProjectNodeKind && isLinux",
 					"group": "navigation@2"
+				},
+				{
+					"command": "_projectManager.cloneProject",
+					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
+					"group": "favorites"
 				},
 				{
 					"command": "_projectManager.deleteProject",
