@@ -66,6 +66,12 @@
 					"name": "%projectManager.views.favorites.name%"
 				},
 				{
+					"id": "projectsExplorerArchived",
+					"name": "%projectManager.views.archived.name%",
+					"when": "projectManager.canShowTreeViewArchived",
+					"visibility": "collapsed"
+				},
+				{
 					"id": "projectsExplorerGit",
 					"name": "%projectManager.views.git.name%",
 					"when": "projectManager.canShowTreeViewGit",
@@ -332,6 +338,23 @@
 			{
 				"command": "_projectManager.cloneProject",
 				"title": "%projectManager.commands.cloneProject.title%"
+			},
+			{
+				"command": "_projectManager.archiveProject",
+				"title": "%projectManager.commands.archiveProject.title%"
+			},
+			{
+				"command": "_projectManager.restoreProject",
+				"title": "%projectManager.commands.restoreProject.title%"
+			},
+			{
+				"command": "_projectManager.deleteArchivedProject",
+				"title": "%projectManager.commands.deleteArchivedProject.title%"
+			},
+			{
+				"command": "_projectManager.deleteAllArchived",
+				"title": "%projectManager.commands.deleteAllArchived.title%",
+				"icon": "$(trash)"
 			}
 		],
 		"menus": {
@@ -362,6 +385,22 @@
 				},
 				{
 					"command": "_projectManager.cloneProject",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.archiveProject",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.restoreProject",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.deleteArchivedProject",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.deleteAllArchived",
 					"when": "false"
 				},
 				{
@@ -474,6 +513,11 @@
 				}
 			],
 			"view/title": [
+				{
+					"command": "_projectManager.deleteAllArchived",
+					"when": "view == projectsExplorerArchived",
+					"group": "navigation"
+				},
 				{
 					"command": "projectManager.saveProject",
 					"when": "view == projectsExplorerFavorites",
@@ -632,9 +676,19 @@
 					"group": "favorites"
 				},
 				{
-					"command": "_projectManager.deleteProject",
+					"command": "_projectManager.archiveProject",
 					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
 					"group": "favorites"
+				},
+				{
+					"command": "_projectManager.restoreProject",
+					"when": "view == projectsExplorerArchived && viewItem == ArchivedProjectNodeKind",
+					"group": "archive"
+				},
+				{
+					"command": "_projectManager.deleteArchivedProject",
+					"when": "view == projectsExplorerArchived && viewItem == ArchivedProjectNodeKind",
+					"group": "archive"
 				},
 				{
 					"command": "_projectManager.renameProject",
@@ -643,11 +697,6 @@
 				},
 				{
 					"command": "_projectManager.editTags",
-					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
-					"group": "favorites"
-				},
-				{
-					"command": "_projectManager.toggleProjectEnabled",
 					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
 					"group": "favorites"
 				},

@@ -1,6 +1,7 @@
 {
     "projectManager.activitybar.title": "Project Manager",
     "projectManager.views.favorites.name": "Projects",
+    "projectManager.views.archived.name": "Archived",
     "projectManager.views.git.name": "Git",
     "projectManager.views.svn.name": "SVN",
     "projectManager.views.any.name": "Any",
@@ -40,6 +41,10 @@
     "projectManager.commands.addToWorkspace#sideBar.title": "Add to Workspace",
     "projectManager.commands.addToWorkspace.title": "Project Manager: Add Project to Workspace",
     "projectManager.commands.cloneProject.title": "Clone to New Project...",
+    "projectManager.commands.archiveProject.title": "Archive",
+    "projectManager.commands.restoreProject.title": "Restore",
+    "projectManager.commands.deleteArchivedProject.title": "Delete",
+    "projectManager.commands.deleteAllArchived.title": "Delete All Archived",
     "projectManager.commands.deleteProject.title": "Delete Project",
     "projectManager.commands.renameProject.title": "Rename Project",
     "projectManager.commands.editTags.title": "Edit Tags",

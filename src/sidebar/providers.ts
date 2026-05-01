@@ -8,6 +8,7 @@ import { Locators } from "../autodetect/locators";
 import { ProjectStorage } from "../storage/storage";
 import { ProjectNode, TagNode } from "./nodes";
 import { AutodetectProvider, deduplicateByRemote } from "./autodetectProvider";
+import { ArchivedProvider } from "./archivedProvider";
 import { StorageProvider } from "./storageProvider";
 import { Container } from "../core/container";
 import { l10n } from "vscode";
@@ -15,6 +16,7 @@ import { l10n } from "vscode";
 export class Providers {
 
     public storageProvider: StorageProvider;
+    public archivedProvider: ArchivedProvider;
     public vscodeProvider: AutodetectProvider;
     public gitProvider: AutodetectProvider;
     public mercurialProvider: AutodetectProvider;
@@ -22,6 +24,7 @@ export class Providers {
     public anyProvider: AutodetectProvider;
 
     private storageTreeView: vscode.TreeView<ProjectNode | TagNode>;
+    private archivedTreeView: vscode.TreeView<any>;
     private vscodeTreeView: vscode.TreeView<ProjectNode>;
     private gitTreeView: vscode.TreeView<ProjectNode>;
     private mercurialTreeView: vscode.TreeView<ProjectNode>;
@@ -36,6 +39,7 @@ export class Providers {
         this.projectStorage = storage;
 
         this.storageProvider = new StorageProvider(this.projectStorage);
+        this.archivedProvider = new ArchivedProvider(this.projectStorage);
         this.vscodeProvider = new AutodetectProvider(this.locators.vscLocator);
         this.gitProvider = new AutodetectProvider(this.locators.gitLocator);
         this.mercurialProvider = new AutodetectProvider(this.locators.mercurialLocator);
@@ -46,6 +50,10 @@ export class Providers {
             treeDataProvider: this.storageProvider,
             dragAndDropController: this.storageProvider,
             showCollapseAll: true
+        });
+        this.archivedTreeView = vscode.window.createTreeView("projectsExplorerArchived", {
+            treeDataProvider: this.archivedProvider,
+            showCollapseAll: false
         });
         this.vscodeTreeView = vscode.window.createTreeView("projectsExplorerVSCode", {
             treeDataProvider: this.vscodeProvider,
@@ -116,7 +124,9 @@ export class Providers {
 
     public refreshStorageTreeView() {
         this.storageProvider.refresh();
+        this.archivedProvider.refresh();
         this.updateTreeViewStorage();
+        this.updateArchivedVisibility();
     }
 
     public updateTreeViewStorage() {
@@ -125,8 +135,17 @@ export class Providers {
         this.storageTreeView.description = "";
     }
 
+    public updateArchivedVisibility() {
+        const disabledCount = this.projectStorage.disabled()?.length || 0;
+        vscode.commands.executeCommand("setContext", "projectManager.canShowTreeViewArchived", disabledCount > 0);
+        if (disabledCount > 0) {
+            this.archivedTreeView.title = `Archived (${disabledCount})`;
+        }
+    }
+
     public updateTreeViewDetails() {
         this.updateTreeViewStorage();
+        this.updateArchivedVisibility();
         this.vscodeTreeView.title = `VSCode (${this.locators.vscLocator.projectList.length})`;
         this.gitTreeView.title = `Git (${deduplicateByRemote(this.locators.gitLocator.projectList).length})`;
         this.mercurialTreeView.title = `Mercurial (${this.locators.mercurialLocator.projectList.length})`;

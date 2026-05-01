@@ -98,6 +98,25 @@ export class ProjectNode extends TreeItem {
 }
 
 
+export class ArchivedProjectNode extends TreeItem {
+
+    constructor(
+        public readonly label: string,
+        public readonly collapsibleState: TreeItemCollapsibleState,
+        public readonly preview: ProjectPreview,
+        public readonly command?: Command
+    ) {
+        super(label, collapsibleState);
+        this.contextValue = "ArchivedProjectNodeKind";
+        this.iconPath = ThemeIcons.folder;
+        this.resourceUri = Uri.from({
+            scheme: 'projectManager-view',
+            path: preview.path
+        });
+        this.description = preview.detail;
+    }
+}
+
 export class TagNode extends TreeItem {
 
     constructor(

@@ -32,7 +32,7 @@ export class StorageProvider implements vscode.TreeDataProvider<ProjectNode | Ta
     public readonly onDidChangeTreeData: vscode.Event<ProjectNode | TagNode | void>;
 
     private projectSource: ProjectStorage;
-    private internalOnDidChangeTreeData: vscode.EventEmitter<ProjectNode | TagNode | void> = new vscode.EventEmitter<ProjectNode | void>();
+    private internalOnDidChangeTreeData: vscode.EventEmitter<ProjectNode | TagNode | void> = new vscode.EventEmitter<ProjectNode | TagNode | void>();
     private static readonly TAGS_EXPANSION_STATE_KEY = "projectsExplorerFavorites.tagsExpansionState";
 
     constructor(projectSource: ProjectStorage) {
@@ -103,9 +103,8 @@ export class StorageProvider implements vscode.TreeDataProvider<ProjectNode | Ta
         return element;
     }
 
-    public getChildren(element?: ProjectNode | TagNode): Thenable<ProjectNode[] | TagNode[]> {
+    public getChildren(element?: ProjectNode | TagNode): Thenable<(ProjectNode | TagNode)[]> {
 
-        // loop !!!
         return new Promise(resolve => {
 
             if (element) {
