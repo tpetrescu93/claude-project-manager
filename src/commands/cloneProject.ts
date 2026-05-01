@@ -68,7 +68,7 @@ async function cloneProject(node: ProjectNode, projectStorage: ProjectStorage) {
         try {
             // 1. rsync excluding node_modules
             progress.report({ message: l10n.t("Copying files...") });
-            await run(`rsync -a --exclude='node_modules' --exclude='.venv' --exclude='venv' "${sourcePath}/" "${targetDir}/"`, parentDir);
+            await run(`rsync -a --exclude='node_modules/' --exclude='.venv/' --exclude='venv/' "${sourcePath}/" "${targetDir}/"`, parentDir);
 
             // 2. Clean git locks
             await run(`rm -f .git/index.lock .git/refs/heads/*.lock`, targetDir);
