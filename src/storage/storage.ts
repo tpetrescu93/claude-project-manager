@@ -183,6 +183,19 @@ export class ProjectStorage {
         }
     }
 
+    public moveProject(fromRootPath: string, toRootPath: string): void {
+        const fromIndex = this.projects.findIndex(p =>
+            PathUtils.expandHomePath(p.rootPath).toLowerCase() === fromRootPath.toLowerCase());
+        const toIndex = this.projects.findIndex(p =>
+            PathUtils.expandHomePath(p.rootPath).toLowerCase() === toRootPath.toLowerCase());
+
+        if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) { return; }
+
+        const [ project ] = this.projects.splice(fromIndex, 1);
+        this.projects.splice(toIndex, 0, project);
+        this.save();
+    }
+
     public getAvailableTags(): string[] {
         const tags: string[] = [];
         for (const project of this.projects) {

@@ -22,7 +22,12 @@ interface ProjectInQuickPick {
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
 interface ProjectInQuickPickList extends Array<ProjectInQuickPick> { }
 
-export class StorageProvider implements vscode.TreeDataProvider<ProjectNode | TagNode> {
+export class StorageProvider implements vscode.TreeDataProvider<ProjectNode | TagNode>, vscode.TreeDragAndDropController<ProjectNode | TagNode> {
+
+    private static readonly DRAG_MIME_TYPE = "application/vnd.code.tree.projectsExplorerFavorites";
+
+    public readonly dropMimeTypes: readonly string[] = [ StorageProvider.DRAG_MIME_TYPE ];
+    public readonly dragMimeTypes: readonly string[] = [ StorageProvider.DRAG_MIME_TYPE ];
 
     public readonly onDidChangeTreeData: vscode.Event<ProjectNode | TagNode | void>;
 
@@ -71,6 +76,27 @@ export class StorageProvider implements vscode.TreeDataProvider<ProjectNode | Ta
 
     public refresh(): void {
         this.internalOnDidChangeTreeData.fire();
+    }
+
+    public handleDrag(source: readonly (ProjectNode | TagNode)[], dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): void {
+        const projectNodes = source.filter((s): s is ProjectNode => s instanceof ProjectNode);
+        if (projectNodes.length === 0) { return; }
+
+        const paths = projectNodes.map(n => n.preview.path);
+        dataTransfer.set(StorageProvider.DRAG_MIME_TYPE, new vscode.DataTransferItem(paths));
+    }
+
+    public async handleDrop(target: ProjectNode | TagNode | undefined, dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): Promise<void> {
+        if (!target || !(target instanceof ProjectNode)) { return; }
+
+        const transferItem = dataTransfer.get(StorageProvider.DRAG_MIME_TYPE);
+        if (!transferItem) { return; }
+
+        const sourcePaths: string[] = transferItem.value;
+        if (!sourcePaths || sourcePaths.length === 0) { return; }
+
+        this.projectSource.moveProject(sourcePaths[ 0 ], target.preview.path);
+        this.refresh();
     }
 
     public getTreeItem(element: ProjectNode | TagNode): vscode.TreeItem {

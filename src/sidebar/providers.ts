@@ -44,6 +44,7 @@ export class Providers {
 
         this.storageTreeView = vscode.window.createTreeView("projectsExplorerFavorites", {
             treeDataProvider: this.storageProvider,
+            dragAndDropController: this.storageProvider,
             showCollapseAll: true
         });
         this.vscodeTreeView = vscode.window.createTreeView("projectsExplorerVSCode", {
