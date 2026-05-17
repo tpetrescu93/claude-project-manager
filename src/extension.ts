@@ -29,6 +29,7 @@ import { ViewFavoritesAs } from "./sidebar/constants";
 import { registerSortBy, updateSortByContext } from "./commands/sortBy";
 import { registerCloneProject } from "./commands/cloneProject";
 import { registerArchiveCommands } from "./commands/archiveProject";
+import { registerProjectStatuses } from "./commands/projectStatuses";
 import { canSwitchOnActiveWindow, openPickedProject, pickProjects, shouldOpenInNewWindow } from "./quickpick/projectsPicker";
 import { CustomProjectLocator } from "./autodetect/abstractLocator";
 import { l10n } from "vscode";
@@ -60,6 +61,7 @@ export async function activate(context: vscode.ExtensionContext) {
     registerSupportProjectManager();
     registerCloneProject(projectStorage);
     registerArchiveCommands(projectStorage, providerManager);
+    registerProjectStatuses(projectStorage, providerManager);
     registerSortBy();
     registerSideBarDecorations();
     await registerWalkthrough();
