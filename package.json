@@ -277,6 +277,11 @@
 				"title": "%projectManager.commands.openClaudeSession.title%"
 			},
 			{
+				"command": "_projectManager.pin",
+				"title": "%projectManager.commands.pin.title%",
+				"icon": "$(pin)"
+			},
+			{
 				"command": "projectManager.addToWorkspace#sideBar",
 				"title": "%projectManager.commands.addToWorkspace#sideBar.title%"
 			},
@@ -382,6 +387,10 @@
 				},
 				{
 					"command": "_projectManager.openClaudeSession",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.pin",
 					"when": "false"
 				},
 				{
@@ -659,7 +668,12 @@
 			"view/item/context": [
 				{
 					"command": "_projectManager.openPR",
-					"when": "view =~ /projectsExplorer(Favorites|VSCode|Git|SVN|Any|Mercurial)/ && viewItem == ProjectNodeKind",
+					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
+					"group": "inline"
+				},
+				{
+					"command": "_projectManager.pin",
+					"when": "view == projectsExplorerGit && viewItem == ProjectNodeKind",
 					"group": "inline"
 				},
 				{
@@ -729,7 +743,12 @@
 				},
 				{
 					"command": "projectManager.addToFavorites",
-					"when": "view =~ /projectsExplorer(VSCode|Git|SVN|Any|Mercurial)/ && viewItem == ProjectNodeKind",
+					"when": "view =~ /projectsExplorer(VSCode|SVN|Any|Mercurial)/ && viewItem == ProjectNodeKind",
+					"group": "workspace"
+				},
+				{
+					"command": "_projectManager.pin",
+					"when": "view == projectsExplorerGit && viewItem == ProjectNodeKind",
 					"group": "workspace"
 				}
 			],
