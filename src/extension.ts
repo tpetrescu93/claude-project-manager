@@ -97,7 +97,6 @@ export async function activate(context: vscode.ExtensionContext) {
                 t.dispose();
             }
         });
-        await context.globalState.update("autoLaunchClaude", true);
         vscode.commands.executeCommand("vscode.openFolder", uri, { forceProfile: profile , forceNewWindow: false } )
             .then(
                 () => ({}),  // done
@@ -194,11 +193,13 @@ export async function activate(context: vscode.ExtensionContext) {
     loadProjectsFile();
     registerProjectStatuses(projectStorage, providerManager);
 
-    // Auto-launch Claude session if the workspace was opened via Project Manager
-    if (context.globalState.get<boolean>("autoLaunchClaude", false)) {
-        await context.globalState.update("autoLaunchClaude", false);
-        const folder = vscode.workspace.workspaceFolders?.[0];
-        if (folder) {
+    // Auto-launch Claude session if the workspace is a registered PM project and no Claude terminal exists
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    if (folder) {
+        const expectedName = CLAUDE_TERMINAL_PREFIX + folder.name;
+        const existing = vscode.window.terminals.find(t => t.name === expectedName);
+        const isPmProject = projectStorage.existsWithRootPath(folder.uri.fsPath);
+        if (!existing && isPmProject) {
             vscode.commands.executeCommand("_projectManager.openClaudeSession", {
                 preview: { name: folder.name, path: folder.uri.fsPath }
             });
