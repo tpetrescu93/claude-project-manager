@@ -35,6 +35,7 @@
     "projectManager.commands.openSettings#sideBarMercurial.title": "Open Settings",
     "projectManager.commands.open.title": "Open",
     "projectManager.commands.openInNewWindow.title": "Open in New Window",
+    "projectManager.commands.openPR.title": "Open PR",
     "projectManager.commands.revealInFinder#sideBar.title": "Reveal in Finder",
     "projectManager.commands.revealInExplorer#sideBar.title": "Reveal in Explorer",
     "projectManager.commands.revealInFileManager#sideBar.title": "Reveal in File Manager",

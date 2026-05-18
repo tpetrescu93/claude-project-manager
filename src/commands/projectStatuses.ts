@@ -22,6 +22,7 @@ const CLAUDE_INTERVAL_MS = 2_000;
 export type PrStatus = "open_passing" | "open_failing" | "open_pending" | "merged" | "no_pr" | null;
 
 const statusCache = new Map<string, PrStatus>();
+const prUrlCache = new Map<string, string>();
 const claudeThinkingCache = new Map<string, boolean>();
 const claudeNeedsInputCache = new Map<string, boolean>();
 const statusChangeEmitter = new EventEmitter<void>();
@@ -29,6 +30,10 @@ export const onStatusChange = statusChangeEmitter.event;
 
 export function getPrStatusForPath(rootPath: string): PrStatus {
     return statusCache.get(rootPath) ?? null;
+}
+
+export function getPrUrlForPath(rootPath: string): string | undefined {
+    return prUrlCache.get(rootPath);
 }
 
 export function isClaudeThinkingForPath(rootPath: string): boolean {
@@ -49,44 +54,45 @@ function stripPrPrefix(name: string): string {
     return base;
 }
 
-async function getPrStatus(projectPath: string): Promise<PrStatus> {
+async function getPrStatus(projectPath: string): Promise<{ status: PrStatus; url?: string }> {
     try {
         const branch = (await execAsync("git rev-parse --abbrev-ref HEAD", { cwd: projectPath, timeout: 5000 })).stdout.trim();
         if (branch === "HEAD" || branch === "master" || branch === "main" || branch === "develop") {
-            return null;
+            return { status: null };
         }
 
         // Open PR with CI status
         const openResult = await execAsync(
-            `gh pr list --state open --head "${branch}" --limit 1 --json number,statusCheckRollup`,
+            `gh pr list --state open --head "${branch}" --limit 1 --json number,url,statusCheckRollup`,
             { cwd: projectPath, timeout: 10_000 }
         );
         const openData = JSON.parse(openResult.stdout);
         if (openData.length > 0) {
+            const url = openData[ 0 ].url as string | undefined;
             const checks = openData[ 0 ].statusCheckRollup || [];
-            if (checks.length === 0) { return "open_pending"; }
+            if (checks.length === 0) { return { status: "open_pending", url }; }
             const statuses = new Set(checks.map((c: any) => c.status || ""));
             const conclusions = new Set(checks.map((c: any) => c.conclusion || ""));
-            if (Array.from(statuses).some(s => s !== "COMPLETED")) { return "open_pending"; }
-            if (conclusions.has("FAILURE") || conclusions.has("ERROR") || conclusions.has("TIMED_OUT")) { return "open_failing"; }
-            return "open_passing";
+            if (Array.from(statuses).some(s => s !== "COMPLETED")) { return { status: "open_pending", url }; }
+            if (conclusions.has("FAILURE") || conclusions.has("ERROR") || conclusions.has("TIMED_OUT")) { return { status: "open_failing", url }; }
+            return { status: "open_passing", url };
         }
 
         // Recently merged
         const mergedResult = await execAsync(
-            `gh pr list --state merged --head "${branch}" --limit 1 --json mergedAt`,
+            `gh pr list --state merged --head "${branch}" --limit 1 --json mergedAt,url`,
             { cwd: projectPath, timeout: 10_000 }
         );
         const mergedData = JSON.parse(mergedResult.stdout);
         if (mergedData.length > 0) {
             const mergedAt = new Date(mergedData[ 0 ].mergedAt);
             const ageDays = (Date.now() - mergedAt.getTime()) / (1000 * 60 * 60 * 24);
-            if (ageDays < MERGED_WINDOW_DAYS) { return "merged"; }
+            if (ageDays < MERGED_WINDOW_DAYS) { return { status: "merged", url: mergedData[ 0 ].url }; }
         }
 
-        return "no_pr";
+        return { status: "no_pr" };
     } catch {
-        return null;
+        return { status: null };
     }
 }
 
@@ -127,17 +133,27 @@ async function updateGitStatuses(projectStorage: ProjectStorage, providerManager
     const projects = (projectStorage as any).projects as Array<{ name: string; rootPath: string }>;
     if (!projects || projects.length === 0) { return; }
 
-    const statuses = await Promise.all(
-        projects.map(p => getPrStatus(p.rootPath).catch(() => null))
+    const results = await Promise.all(
+        projects.map(p => getPrStatus(p.rootPath).catch(() => ({ status: null, url: undefined } as { status: PrStatus; url?: string })))
     );
 
     let changed = false;
     for (let i = 0; i < projects.length; i++) {
         const project = projects[ i ];
-        const newStatus = statuses[ i ];
+        const newStatus = results[ i ].status;
+        const newUrl = results[ i ].url;
         const oldStatus = statusCache.get(project.rootPath) ?? null;
+        const oldUrl = prUrlCache.get(project.rootPath);
         if (newStatus !== oldStatus) {
             statusCache.set(project.rootPath, newStatus);
+            changed = true;
+        }
+        if (newUrl !== oldUrl) {
+            if (newUrl) {
+                prUrlCache.set(project.rootPath, newUrl);
+            } else {
+                prUrlCache.delete(project.rootPath);
+            }
             changed = true;
         }
     }

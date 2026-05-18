@@ -29,7 +29,7 @@ import { ViewFavoritesAs } from "./sidebar/constants";
 import { registerSortBy, updateSortByContext } from "./commands/sortBy";
 import { registerCloneProject } from "./commands/cloneProject";
 import { registerArchiveCommands } from "./commands/archiveProject";
-import { registerProjectStatuses } from "./commands/projectStatuses";
+import { getPrUrlForPath, registerProjectStatuses } from "./commands/projectStatuses";
 import { canSwitchOnActiveWindow, openPickedProject, pickProjects, shouldOpenInNewWindow } from "./quickpick/projectsPicker";
 import { CustomProjectLocator } from "./autodetect/abstractLocator";
 import { l10n } from "vscode";
@@ -101,6 +101,15 @@ export async function activate(context: vscode.ExtensionContext) {
             .then(
                 () => ({}),  // done
                 () => vscode.window.showInformationMessage(l10n.t("Could not open the project!")));
+    });
+    vscode.commands.registerCommand("_projectManager.openPR", (node) => {
+        const rootPath = node?.preview?.path ?? node?.command?.arguments?.[0];
+        const url = getPrUrlForPath(rootPath);
+        if (url) {
+            vscode.env.openExternal(vscode.Uri.parse(url));
+        } else {
+            vscode.window.showInformationMessage(l10n.t("No open PR for this project."));
+        }
     });
 
     // register commands (here, because it needs to be used right below if an invalid JSON is present)
