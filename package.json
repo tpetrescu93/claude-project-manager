@@ -273,6 +273,10 @@
 				"icon": "$(link-external)"
 			},
 			{
+				"command": "_projectManager.openClaudeSession",
+				"title": "%projectManager.commands.openClaudeSession.title%"
+			},
+			{
 				"command": "projectManager.addToWorkspace#sideBar",
 				"title": "%projectManager.commands.addToWorkspace#sideBar.title%"
 			},
@@ -374,6 +378,10 @@
 				},
 				{
 					"command": "_projectManager.openPR",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.openClaudeSession",
 					"when": "false"
 				},
 				{
@@ -678,6 +686,11 @@
 					"command": "_projectManager.revealInFileManager#sideBar",
 					"when": "view =~ /projectsExplorer(Favorites|VSCode|Git|SVN|Any|Mercurial)/ && viewItem == ProjectNodeKind && isLinux",
 					"group": "navigation@2"
+				},
+				{
+					"command": "_projectManager.openClaudeSession",
+					"when": "view =~ /projectsExplorer(Favorites|Git)/ && viewItem == ProjectNodeKind",
+					"group": "favorites"
 				},
 				{
 					"command": "_projectManager.cloneProject",

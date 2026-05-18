@@ -40,6 +40,8 @@ import { Project } from "./core/project";
 
 let locators: Locators;
 
+const CLAUDE_TERMINAL_PREFIX = "Claude: ";
+
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export async function activate(context: vscode.ExtensionContext) {
@@ -89,6 +91,13 @@ export async function activate(context: vscode.ExtensionContext) {
         if (!await canSwitchOnActiveWindow(CommandLocation.SideBar)) {
             return;
         }
+        // Dispose the Claude terminal(s) before switching so VS Code saves a clean state
+        vscode.window.terminals.forEach(t => {
+            if (t.name.startsWith(CLAUDE_TERMINAL_PREFIX)) {
+                t.dispose();
+            }
+        });
+        await context.globalState.update("autoLaunchClaude", true);
         vscode.commands.executeCommand("vscode.openFolder", uri, { forceProfile: profile , forceNewWindow: false } )
             .then(
                 () => ({}),  // done
@@ -110,6 +119,17 @@ export async function activate(context: vscode.ExtensionContext) {
         } else {
             vscode.window.showInformationMessage(l10n.t("No open PR for this project."));
         }
+    });
+    vscode.commands.registerCommand("_projectManager.openClaudeSession", (node) => {
+        const rootPath: string = node?.preview?.path ?? node?.command?.arguments?.[0];
+        const projectName: string = node?.preview?.name ?? path.basename(rootPath);
+        const terminal = vscode.window.createTerminal({
+            name: CLAUDE_TERMINAL_PREFIX + projectName,
+            cwd: rootPath,
+            shellPath: "/bin/bash",
+            shellArgs: [ "-lic", "gmux" ]
+        });
+        terminal.show();
     });
 
     // register commands (here, because it needs to be used right below if an invalid JSON is present)
@@ -172,6 +192,17 @@ export async function activate(context: vscode.ExtensionContext) {
 
     loadProjectsFile();
     registerProjectStatuses(projectStorage, providerManager);
+
+    // Auto-launch Claude session if the workspace was opened via Project Manager
+    if (context.globalState.get<boolean>("autoLaunchClaude", false)) {
+        await context.globalState.update("autoLaunchClaude", false);
+        const folder = vscode.workspace.workspaceFolders?.[0];
+        if (folder) {
+            vscode.commands.executeCommand("_projectManager.openClaudeSession", {
+                preview: { name: folder.name, path: folder.uri.fsPath }
+            });
+        }
+    }
 
     // TODO: Extract the detection of the current project from `showStatusBar`, and optimize how it works.
     // Evaluate if it is really necessary to get the `Project` instance, or if just the root path is enough.
