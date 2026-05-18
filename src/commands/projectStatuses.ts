@@ -6,6 +6,7 @@
 import * as path from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
+import { EventEmitter } from "vscode";
 import { Container } from "../core/container";
 import { ProjectStorage } from "../storage/storage";
 import { Providers } from "../sidebar/providers";
@@ -18,10 +19,18 @@ const MERGED_WINDOW_DAYS = 30;
 const GIT_INTERVAL_MS = 60_000;
 const CLAUDE_INTERVAL_MS = 2_000;
 
-type PrStatus = "open_passing" | "open_failing" | "open_pending" | "merged" | "no_pr" | null;
+export type PrStatus = "open_passing" | "open_failing" | "open_pending" | "merged" | "no_pr" | null;
 
-function stripStatus(name: string): string {
-    let base = name.replace(THINKING_RE, "");
+const statusCache = new Map<string, PrStatus>();
+const statusChangeEmitter = new EventEmitter<void>();
+export const onStatusChange = statusChangeEmitter.event;
+
+export function getPrStatusForPath(rootPath: string): PrStatus {
+    return statusCache.get(rootPath) ?? null;
+}
+
+function stripPrPrefix(name: string): string {
+    let base = name;
     while (true) {
         const stripped = base.replace(STATUS_RE, "");
         if (stripped === base) { break; }
@@ -85,15 +94,19 @@ async function isClaudeThinking(projectPath: string): Promise<boolean> {
     }
 }
 
-function applyPrPrefix(baseName: string, status: PrStatus): string {
-    switch (status) {
-        case "open_passing": return `✓ ${baseName}`;
-        case "open_failing": return `✗ ${baseName}`;
-        case "open_pending": return `… ${baseName}`;
-        case "merged": return `● ${baseName}`;
-        case "no_pr": return `○ ${baseName}`;
-        default: return baseName;
+function cleanLegacyPrefixes(projectStorage: ProjectStorage): boolean {
+    const projects = (projectStorage as any).projects as Array<{ name: string; rootPath: string }>;
+    if (!projects) { return false; }
+
+    let changed = false;
+    for (const project of projects) {
+        const cleaned = stripPrPrefix(project.name);
+        if (cleaned !== project.name) {
+            project.name = cleaned;
+            changed = true;
+        }
     }
+    return changed;
 }
 
 async function updateGitStatuses(projectStorage: ProjectStorage, providerManager: Providers) {
@@ -107,20 +120,16 @@ async function updateGitStatuses(projectStorage: ProjectStorage, providerManager
     let changed = false;
     for (let i = 0; i < projects.length; i++) {
         const project = projects[ i ];
-        const status = statuses[ i ];
-        // Strip both PR prefix and thinking suffix, then re-apply only the PR prefix
-        const thinking = THINKING_RE.test(project.name);
-        const base = stripStatus(project.name);
-        let newName = applyPrPrefix(base, status);
-        if (thinking) { newName += " *"; }
-        if (project.name !== newName) {
-            project.name = newName;
+        const newStatus = statuses[ i ];
+        const oldStatus = statusCache.get(project.rootPath) ?? null;
+        if (newStatus !== oldStatus) {
+            statusCache.set(project.rootPath, newStatus);
             changed = true;
         }
     }
 
     if (changed) {
-        projectStorage.save();
+        statusChangeEmitter.fire();
         providerManager.refreshStorageTreeView();
     }
 }
@@ -155,6 +164,12 @@ async function updateClaudeStatuses(projectStorage: ProjectStorage, providerMana
 }
 
 export function registerProjectStatuses(projectStorage: ProjectStorage, providerManager: Providers) {
+    // Clean up any leftover PR prefixes from the old cron in names on startup
+    if (cleanLegacyPrefixes(projectStorage)) {
+        projectStorage.save();
+        providerManager.refreshStorageTreeView();
+    }
+
     const gitTimer = setInterval(() => {
         updateGitStatuses(projectStorage, providerManager).catch(() => { /* swallow */ });
     }, GIT_INTERVAL_MS);

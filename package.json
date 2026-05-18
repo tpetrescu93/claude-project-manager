@@ -672,7 +672,7 @@
 				},
 				{
 					"command": "_projectManager.cloneProject",
-					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
+					"when": "view =~ /projectsExplorer(Favorites|Git)/ && viewItem == ProjectNodeKind",
 					"group": "favorites"
 				},
 				{
@@ -1081,6 +1081,15 @@
 					"light": "#2fb15b",
 					"dark": "#2fb15b",
 					"highContrast": "#2fb15b"
+				}
+			},
+			{
+				"id": "projectManager.status.mergedForeground",
+				"description": "Color for the merged PR status icon",
+				"defaults": {
+					"light": "#a371f7",
+					"dark": "#a371f7",
+					"highContrast": "#a371f7"
 				}
 			}
 		],

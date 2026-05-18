@@ -61,7 +61,6 @@ export async function activate(context: vscode.ExtensionContext) {
     registerSupportProjectManager();
     registerCloneProject(projectStorage);
     registerArchiveCommands(projectStorage, providerManager);
-    registerProjectStatuses(projectStorage, providerManager);
     registerSortBy();
     registerSideBarDecorations();
     await registerWalkthrough();
@@ -163,6 +162,7 @@ export async function activate(context: vscode.ExtensionContext) {
     }
 
     loadProjectsFile();
+    registerProjectStatuses(projectStorage, providerManager);
 
     // TODO: Extract the detection of the current project from `showStatusBar`, and optimize how it works.
     // Evaluate if it is really necessary to get the `Project` instance, or if just the root path is enough.

@@ -7,6 +7,8 @@ import { Command, IconPath, MarkdownString, ThemeColor, ThemeIcon, TreeItem, Tre
 import { ThemeIcons } from "vscode-ext-codicons";
 import { currentIconThemeHasFolderIcon, getProjectIcon, getIconDetailsFromProjectPath } from "../utils/icons";
 import { REMOTE_PREFIX, VIRTUAL_WORKSPACE_PREFIX } from "../utils/remote";
+import { getPrStatusForPath, PrStatus } from "../commands/projectStatuses";
+import { Container } from "../core/container";
 
 export interface ProjectPreview {
     name: string;
@@ -26,7 +28,9 @@ export class ProjectNode extends TreeItem {
         super(label, collapsibleState);
 
         if (icon) {
-            this.iconPath = this.getIconPath(icon, preview.path);
+            const prStatus = getPrStatusForPath(preview.path);
+            const prIcon = ProjectNode.getPrStatusIcon(prStatus);
+            this.iconPath = prIcon ?? this.getIconPath(icon, preview.path);
             this.contextValue = "ProjectNodeKind";
         } else {
             this.contextValue = "ConfigNodeKind";
@@ -41,6 +45,29 @@ export class ProjectNode extends TreeItem {
         this.tooltip = new MarkdownString(
             `${label}\n\n_${preview.path}_\n\n${tooltipIcon.icon} ${tooltipIcon.title}`, true);
         this.description = preview.detail;
+    }
+
+    private static getPrStatusIcon(status: PrStatus): IconPath | undefined {
+        switch (status) {
+            case "no_pr":
+                return new ThemeIcon("circle-outline");
+            case "open_pending":
+                return new ThemeIcon("sync~spin", new ThemeColor("charts.yellow"));
+            case "open_passing":
+                return new ThemeIcon("pass-filled", new ThemeColor("charts.green"));
+            case "open_failing":
+                return {
+                    light: Uri.joinPath(Container.context.extensionUri, "images/ico-status-failing-light.svg"),
+                    dark: Uri.joinPath(Container.context.extensionUri, "images/ico-status-failing-dark.svg")
+                };
+            case "merged":
+                return {
+                    light: Uri.joinPath(Container.context.extensionUri, "images/ico-status-merged-light.svg"),
+                    dark: Uri.joinPath(Container.context.extensionUri, "images/ico-status-merged-dark.svg")
+                };
+            default:
+                return undefined;
+        }
     }
 
     private getIconPath(icon: string, projectPath: string): string | IconPath {
