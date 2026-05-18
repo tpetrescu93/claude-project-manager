@@ -1091,6 +1091,15 @@
 					"dark": "#a371f7",
 					"highContrast": "#a371f7"
 				}
+			},
+			{
+				"id": "projectManager.status.claudeThinkingForeground",
+				"description": "Color for the Claude thinking spinner",
+				"defaults": {
+					"light": "#f97316",
+					"dark": "#f97316",
+					"highContrast": "#f97316"
+				}
 			}
 		],
 		"keybindings": [

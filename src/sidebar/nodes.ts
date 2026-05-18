@@ -7,7 +7,7 @@ import { Command, IconPath, MarkdownString, ThemeColor, ThemeIcon, TreeItem, Tre
 import { ThemeIcons } from "vscode-ext-codicons";
 import { currentIconThemeHasFolderIcon, getProjectIcon, getIconDetailsFromProjectPath } from "../utils/icons";
 import { REMOTE_PREFIX, VIRTUAL_WORKSPACE_PREFIX } from "../utils/remote";
-import { getPrStatusForPath, PrStatus } from "../commands/projectStatuses";
+import { getPrStatusForPath, isClaudeThinkingForPath, isClaudeWaitingForInputForPath, PrStatus } from "../commands/projectStatuses";
 import { Container } from "../core/container";
 
 export interface ProjectPreview {
@@ -28,9 +28,23 @@ export class ProjectNode extends TreeItem {
         super(label, collapsibleState);
 
         if (icon) {
-            const prStatus = getPrStatusForPath(preview.path);
-            const prIcon = ProjectNode.getPrStatusIcon(prStatus);
-            this.iconPath = prIcon ?? this.getIconPath(icon, preview.path);
+            const needsInput = isClaudeWaitingForInputForPath(preview.path);
+            const thinking = isClaudeThinkingForPath(preview.path);
+            if (needsInput) {
+                this.iconPath = {
+                    light: Uri.joinPath(Container.context.extensionUri, "images/ico-status-needsinput-light.svg"),
+                    dark: Uri.joinPath(Container.context.extensionUri, "images/ico-status-needsinput-dark.svg")
+                };
+            } else if (thinking) {
+                this.iconPath = {
+                    light: Uri.joinPath(Container.context.extensionUri, "images/ico-status-thinking-light.svg"),
+                    dark: Uri.joinPath(Container.context.extensionUri, "images/ico-status-thinking-dark.svg")
+                };
+            } else {
+                const prStatus = getPrStatusForPath(preview.path);
+                const prIcon = ProjectNode.getPrStatusIcon(prStatus);
+                this.iconPath = prIcon ?? this.getIconPath(icon, preview.path);
+            }
             this.contextValue = "ProjectNodeKind";
         } else {
             this.contextValue = "ConfigNodeKind";

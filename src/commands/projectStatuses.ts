@@ -22,11 +22,21 @@ const CLAUDE_INTERVAL_MS = 2_000;
 export type PrStatus = "open_passing" | "open_failing" | "open_pending" | "merged" | "no_pr" | null;
 
 const statusCache = new Map<string, PrStatus>();
+const claudeThinkingCache = new Map<string, boolean>();
+const claudeNeedsInputCache = new Map<string, boolean>();
 const statusChangeEmitter = new EventEmitter<void>();
 export const onStatusChange = statusChangeEmitter.event;
 
 export function getPrStatusForPath(rootPath: string): PrStatus {
     return statusCache.get(rootPath) ?? null;
+}
+
+export function isClaudeThinkingForPath(rootPath: string): boolean {
+    return claudeThinkingCache.get(rootPath) ?? false;
+}
+
+export function isClaudeWaitingForInputForPath(rootPath: string): boolean {
+    return claudeNeedsInputCache.get(rootPath) ?? false;
 }
 
 function stripPrPrefix(name: string): string {
@@ -80,17 +90,20 @@ async function getPrStatus(projectPath: string): Promise<PrStatus> {
     }
 }
 
-async function isClaudeThinking(projectPath: string): Promise<boolean> {
+async function captureClaudeState(projectPath: string): Promise<{ thinking: boolean; needsInput: boolean }> {
     try {
         const sessionName = path.basename(projectPath).replace(/\./g, "-");
         const result = await execAsync(
-            `tmux capture-pane -t "${sessionName}" -p -S -50`,
+            `tmux capture-pane -t "${sessionName}" -p -S -20`,
             { timeout: 5000 }
         );
-        const content = result.stdout.toLowerCase();
-        return content.includes("thought for") || content.includes("thinking");
+        const out = result.stdout;
+        return {
+            thinking: /\b(Computing|Forging|Ionizing|Manifesting|Thinking)…/.test(out),
+            needsInput: out.includes("Enter to select · ↑/↓ to navigate · Esc to cancel"),
+        };
     } catch {
-        return false;
+        return { thinking: false, needsInput: false };
     }
 }
 
@@ -100,7 +113,8 @@ function cleanLegacyPrefixes(projectStorage: ProjectStorage): boolean {
 
     let changed = false;
     for (const project of projects) {
-        const cleaned = stripPrPrefix(project.name);
+        let cleaned = stripPrPrefix(project.name);
+        cleaned = cleaned.replace(THINKING_RE, "");
         if (cleaned !== project.name) {
             project.name = cleaned;
             changed = true;
@@ -138,27 +152,28 @@ async function updateClaudeStatuses(projectStorage: ProjectStorage, providerMana
     const projects = (projectStorage as any).projects as Array<{ name: string; rootPath: string }>;
     if (!projects || projects.length === 0) { return; }
 
-    const thinking = await Promise.all(
-        projects.map(p => isClaudeThinking(p.rootPath).catch(() => false))
+    const states = await Promise.all(
+        projects.map(p => captureClaudeState(p.rootPath).catch(() => ({ thinking: false, needsInput: false })))
     );
 
     let changed = false;
     for (let i = 0; i < projects.length; i++) {
         const project = projects[ i ];
-        const isThinking = thinking[ i ];
-        const hasMarker = THINKING_RE.test(project.name);
-
-        if (isThinking && !hasMarker) {
-            project.name = project.name + " *";
+        const { thinking, needsInput } = states[ i ];
+        const oldThinking = claudeThinkingCache.get(project.rootPath) ?? false;
+        const oldNeedsInput = claudeNeedsInputCache.get(project.rootPath) ?? false;
+        if (thinking !== oldThinking) {
+            claudeThinkingCache.set(project.rootPath, thinking);
             changed = true;
-        } else if (!isThinking && hasMarker) {
-            project.name = project.name.replace(THINKING_RE, "");
+        }
+        if (needsInput !== oldNeedsInput) {
+            claudeNeedsInputCache.set(project.rootPath, needsInput);
             changed = true;
         }
     }
 
     if (changed) {
-        projectStorage.save();
+        statusChangeEmitter.fire();
         providerManager.refreshStorageTreeView();
     }
 }
