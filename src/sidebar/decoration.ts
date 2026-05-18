@@ -13,7 +13,6 @@ export function registerSideBarDecorations() {
 
             if (uri.path === Container.currentProject.rootPath) {
                 return {
-                    badge: '✔',
                     color: new ThemeColor('projectManager.sideBar.currentProjectHighlightForeground')
                 };
             }
