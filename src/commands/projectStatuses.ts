@@ -133,65 +133,57 @@ async function updateGitStatuses(projectStorage: ProjectStorage, providerManager
     const projects = (projectStorage as any).projects as Array<{ name: string; rootPath: string }>;
     if (!projects || projects.length === 0) { return; }
 
-    const results = await Promise.all(
-        projects.map(p => getPrStatus(p.rootPath).catch(() => ({ status: null, url: undefined } as { status: PrStatus; url?: string })))
-    );
-
-    let changed = false;
-    for (let i = 0; i < projects.length; i++) {
-        const project = projects[ i ];
-        const newStatus = results[ i ].status;
-        const newUrl = results[ i ].url;
-        const oldStatus = statusCache.get(project.rootPath) ?? null;
-        const oldUrl = prUrlCache.get(project.rootPath);
-        if (newStatus !== oldStatus) {
-            statusCache.set(project.rootPath, newStatus);
-            changed = true;
-        }
-        if (newUrl !== oldUrl) {
-            if (newUrl) {
-                prUrlCache.set(project.rootPath, newUrl);
-            } else {
-                prUrlCache.delete(project.rootPath);
+    // Fire each gh call independently and refresh only the affected project's tree node
+    projects.forEach(p => {
+        getPrStatus(p.rootPath).then(result => {
+            const newStatus = result.status;
+            const newUrl = result.url;
+            const oldStatus = statusCache.get(p.rootPath) ?? null;
+            const oldUrl = prUrlCache.get(p.rootPath);
+            let changed = false;
+            if (newStatus !== oldStatus) {
+                statusCache.set(p.rootPath, newStatus);
+                changed = true;
             }
-            changed = true;
-        }
-    }
-
-    if (changed) {
-        statusChangeEmitter.fire();
-        providerManager.refreshStorageTreeView();
-    }
+            if (newUrl !== oldUrl) {
+                if (newUrl) {
+                    prUrlCache.set(p.rootPath, newUrl);
+                } else {
+                    prUrlCache.delete(p.rootPath);
+                }
+                changed = true;
+            }
+            if (changed) {
+                statusChangeEmitter.fire();
+                providerManager.refreshStorageProjectNode(p.rootPath);
+            }
+        }).catch(() => { /* swallow */ });
+    });
 }
 
 async function updateClaudeStatuses(projectStorage: ProjectStorage, providerManager: Providers) {
     const projects = (projectStorage as any).projects as Array<{ name: string; rootPath: string }>;
     if (!projects || projects.length === 0) { return; }
 
-    const states = await Promise.all(
-        projects.map(p => captureClaudeState(p.rootPath).catch(() => ({ thinking: false, needsInput: false })))
-    );
-
-    let changed = false;
-    for (let i = 0; i < projects.length; i++) {
-        const project = projects[ i ];
-        const { thinking, needsInput } = states[ i ];
-        const oldThinking = claudeThinkingCache.get(project.rootPath) ?? false;
-        const oldNeedsInput = claudeNeedsInputCache.get(project.rootPath) ?? false;
-        if (thinking !== oldThinking) {
-            claudeThinkingCache.set(project.rootPath, thinking);
-            changed = true;
-        }
-        if (needsInput !== oldNeedsInput) {
-            claudeNeedsInputCache.set(project.rootPath, needsInput);
-            changed = true;
-        }
-    }
-
-    if (changed) {
-        statusChangeEmitter.fire();
-        providerManager.refreshStorageTreeView();
-    }
+    projects.forEach(p => {
+        captureClaudeState(p.rootPath).then(state => {
+            const oldThinking = claudeThinkingCache.get(p.rootPath) ?? false;
+            const oldNeedsInput = claudeNeedsInputCache.get(p.rootPath) ?? false;
+            let changed = false;
+            if (state.thinking !== oldThinking) {
+                claudeThinkingCache.set(p.rootPath, state.thinking);
+                changed = true;
+            }
+            if (state.needsInput !== oldNeedsInput) {
+                claudeNeedsInputCache.set(p.rootPath, state.needsInput);
+                changed = true;
+            }
+            if (changed) {
+                statusChangeEmitter.fire();
+                providerManager.refreshStorageProjectNode(p.rootPath);
+            }
+        }).catch(() => { /* swallow */ });
+    });
 }
 
 export function registerProjectStatuses(projectStorage: ProjectStorage, providerManager: Providers) {

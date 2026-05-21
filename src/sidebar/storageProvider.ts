@@ -33,6 +33,7 @@ export class StorageProvider implements vscode.TreeDataProvider<ProjectNode | Ta
 
     private projectSource: ProjectStorage;
     private internalOnDidChangeTreeData: vscode.EventEmitter<ProjectNode | TagNode | void> = new vscode.EventEmitter<ProjectNode | TagNode | void>();
+    private nodesByPath = new Map<string, ProjectNode>();
     private static readonly TAGS_EXPANSION_STATE_KEY = "projectsExplorerFavorites.tagsExpansionState";
 
     constructor(projectSource: ProjectStorage) {
@@ -75,7 +76,15 @@ export class StorageProvider implements vscode.TreeDataProvider<ProjectNode | Ta
     }
 
     public refresh(): void {
+        this.nodesByPath.clear();
         this.internalOnDidChangeTreeData.fire();
+    }
+
+    public refreshProjectNode(rootPath: string): void {
+        const node = this.nodesByPath.get(rootPath);
+        if (!node) { return; }
+        node.updateIcon();
+        this.internalOnDidChangeTreeData.fire(node);
     }
 
     public handleDrag(source: readonly (ProjectNode | TagNode)[], dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): void {
@@ -128,15 +137,18 @@ export class StorageProvider implements vscode.TreeDataProvider<ProjectNode | Ta
                     } else if (isRemotePath(prj.description)) {
                         iconFavorites = "favorites-remote";
                     }
-                    nodes.push(new ProjectNode(prj.label, vscode.TreeItemCollapsibleState.None,
+                    const expandedPath = PathUtils.expandHomePath(prj.description);
+                    const node = new ProjectNode(prj.label, vscode.TreeItemCollapsibleState.None,
                         iconFavorites, {
                             name: prj.label,
-                            path: PathUtils.expandHomePath(prj.description)
+                            path: expandedPath
                         }, {
                             command: "_projectManager.open",
                             title: "",
-                            arguments: [ PathUtils.expandHomePath(prj.description), prj.label, prj.profile ],
-                        }));
+                            arguments: [ expandedPath, prj.label, prj.profile ],
+                        });
+                    this.nodesByPath.set(expandedPath, node);
+                    nodes.push(node);
                 }
 
                 resolve(nodes);
@@ -203,16 +215,19 @@ export class StorageProvider implements vscode.TreeDataProvider<ProjectNode | Ta
                     } else if (isRemotePath(prj.description)) {
                         iconFavorites = "favorites-remote";
                     }
-                    nodes.push(new ProjectNode(prj.label, vscode.TreeItemCollapsibleState.None,
+                    const expandedPath = PathUtils.expandHomePath(prj.description);
+                    const node = new ProjectNode(prj.label, vscode.TreeItemCollapsibleState.None,
                         iconFavorites, {
                             name: prj.label,
-                            path: PathUtils.expandHomePath(prj.description)
+                            path: expandedPath
                         },
                         {
                             command: "_projectManager.open",
                             title: "",
-                            arguments: [ PathUtils.expandHomePath(prj.description), prj.label, prj.profile ],
-                        }));
+                            arguments: [ expandedPath, prj.label, prj.profile ],
+                        });
+                    this.nodesByPath.set(expandedPath, node);
+                    nodes.push(node);
                 }
 
                 resolve(nodes);

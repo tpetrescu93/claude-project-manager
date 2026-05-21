@@ -129,6 +129,10 @@ export class Providers {
         this.updateArchivedVisibility();
     }
 
+    public refreshStorageProjectNode(rootPath: string) {
+        this.storageProvider.refreshProjectNode(rootPath);
+    }
+
     public updateTreeViewStorage() {
         const disabledProjects = this.projectStorage.disabled()?.length;
         this.storageTreeView.title = `Projects (${this.projectStorage.length() - disabledProjects})`;

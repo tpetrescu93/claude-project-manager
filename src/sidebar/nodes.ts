@@ -28,23 +28,7 @@ export class ProjectNode extends TreeItem {
         super(label, collapsibleState);
 
         if (icon) {
-            const needsInput = isClaudeWaitingForInputForPath(preview.path);
-            const thinking = isClaudeThinkingForPath(preview.path);
-            if (needsInput) {
-                this.iconPath = {
-                    light: Uri.joinPath(Container.context.extensionUri, "images/ico-status-needsinput-light.svg"),
-                    dark: Uri.joinPath(Container.context.extensionUri, "images/ico-status-needsinput-dark.svg")
-                };
-            } else if (thinking) {
-                this.iconPath = {
-                    light: Uri.joinPath(Container.context.extensionUri, "images/ico-status-thinking-light.svg"),
-                    dark: Uri.joinPath(Container.context.extensionUri, "images/ico-status-thinking-dark.svg")
-                };
-            } else {
-                const prStatus = getPrStatusForPath(preview.path);
-                const prIcon = ProjectNode.getPrStatusIcon(prStatus);
-                this.iconPath = prIcon ?? this.getIconPath(icon, preview.path);
-            }
+            this.updateIcon();
             this.contextValue = "ProjectNodeKind";
         } else {
             this.contextValue = "ConfigNodeKind";
@@ -59,6 +43,27 @@ export class ProjectNode extends TreeItem {
         this.tooltip = new MarkdownString(
             `${label}\n\n_${preview.path}_\n\n${tooltipIcon.icon} ${tooltipIcon.title}`, true);
         this.description = preview.detail;
+    }
+
+    public updateIcon(): void {
+        if (!this.icon) { return; }
+        const needsInput = isClaudeWaitingForInputForPath(this.preview.path);
+        const thinking = isClaudeThinkingForPath(this.preview.path);
+        if (needsInput) {
+            this.iconPath = {
+                light: Uri.joinPath(Container.context.extensionUri, "images/ico-status-needsinput-light.svg"),
+                dark: Uri.joinPath(Container.context.extensionUri, "images/ico-status-needsinput-dark.svg")
+            };
+        } else if (thinking) {
+            this.iconPath = {
+                light: Uri.joinPath(Container.context.extensionUri, "images/ico-status-thinking-light.svg"),
+                dark: Uri.joinPath(Container.context.extensionUri, "images/ico-status-thinking-dark.svg")
+            };
+        } else {
+            const prStatus = getPrStatusForPath(this.preview.path);
+            const prIcon = ProjectNode.getPrStatusIcon(prStatus);
+            this.iconPath = prIcon ?? this.getIconPath(this.icon, this.preview.path);
+        }
     }
 
     private static getPrStatusIcon(status: PrStatus): IconPath | undefined {
