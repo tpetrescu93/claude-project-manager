@@ -12,10 +12,29 @@ import { Container } from "../core/container";
 import { addParentFolderToDuplicates } from "../utils/path";
 import { getPinnedGitRepos, isShowingPinnedOnly } from "../commands/gitPinning";
 
+const REMOTE_URL_CACHE_KEY = "gitRemoteUrlCache";
+let remoteUrlCache: Record<string, string> | undefined;
+
+function loadRemoteUrlCache(): Record<string, string> {
+    if (!remoteUrlCache) {
+        remoteUrlCache = { ...Container.context.globalState.get<Record<string, string>>(REMOTE_URL_CACHE_KEY, {}) };
+    }
+    return remoteUrlCache;
+}
+
+function persistRemoteUrlCache(): void {
+    Container.context.globalState.update(REMOTE_URL_CACHE_KEY, remoteUrlCache);
+}
+
 function getGitRemoteUrl(projectPath: string): string | undefined {
+    const cache = loadRemoteUrlCache();
+    if (cache[ projectPath ]) { return cache[ projectPath ]; }
     try {
-        return execSync("git remote get-url origin", { cwd: projectPath, timeout: 5000 })
+        const url = execSync("git remote get-url origin", { cwd: projectPath, timeout: 5000 })
             .toString().trim();
+        cache[ projectPath ] = url;
+        persistRemoteUrlCache();
+        return url;
     } catch {
         return undefined;
     }
