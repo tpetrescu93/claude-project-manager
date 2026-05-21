@@ -30,6 +30,7 @@ import { registerSortBy, updateSortByContext } from "./commands/sortBy";
 import { registerCloneProject } from "./commands/cloneProject";
 import { registerArchiveCommands } from "./commands/archiveProject";
 import { getPrUrlForPath, registerProjectStatuses } from "./commands/projectStatuses";
+import { initShowPinnedOnlyContext, toggleGitRepoPin, toggleShowPinnedOnly } from "./commands/gitPinning";
 import { canSwitchOnActiveWindow, openPickedProject, pickProjects, shouldOpenInNewWindow } from "./quickpick/projectsPicker";
 import { CustomProjectLocator } from "./autodetect/abstractLocator";
 import { l10n } from "vscode";
@@ -153,7 +154,18 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("_projectManager.renameProject", (node) => renameProject(node));
     vscode.commands.registerCommand("_projectManager.editTags", (node) => editTags(node));
     vscode.commands.registerCommand("projectManager.addToFavorites", (node) => saveProject(node));
-    vscode.commands.registerCommand("_projectManager.pin", (node) => saveProject(node));
+    vscode.commands.registerCommand("_projectManager.pin", async (node) => {
+        const rootPath: string = node?.preview?.path ?? node?.command?.arguments?.[0];
+        if (!rootPath) { return; }
+        await toggleGitRepoPin(rootPath);
+        providerManager.gitProvider.refresh();
+    });
+    const toggleGitPinnedOnly = async () => {
+        await toggleShowPinnedOnly();
+        providerManager.gitProvider.refresh();
+    };
+    vscode.commands.registerCommand("_projectManager.showPinnedGitOnly", toggleGitPinnedOnly);
+    vscode.commands.registerCommand("_projectManager.showAllGit", toggleGitPinnedOnly);
     vscode.commands.registerCommand("_projectManager.toggleProjectEnabled", (node) => toggleProjectEnabled(node));
 
     const viewAsList = Container.context.globalState.get<boolean>("viewAsList", true);
@@ -192,6 +204,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     loadProjectsFile();
     registerProjectStatuses(projectStorage, providerManager);
+    initShowPinnedOnlyContext();
 
     // Auto-launch Claude session if the workspace is a registered PM project and no Claude terminal exists
     const folder = vscode.workspace.workspaceFolders?.[0];

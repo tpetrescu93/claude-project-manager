@@ -282,6 +282,16 @@
 				"icon": "$(pin)"
 			},
 			{
+				"command": "_projectManager.showPinnedGitOnly",
+				"title": "%projectManager.commands.showPinnedGitOnly.title%",
+				"icon": "$(filter)"
+			},
+			{
+				"command": "_projectManager.showAllGit",
+				"title": "%projectManager.commands.showAllGit.title%",
+				"icon": "$(filter-filled)"
+			},
+			{
 				"command": "projectManager.addToWorkspace#sideBar",
 				"title": "%projectManager.commands.addToWorkspace#sideBar.title%"
 			},
@@ -391,6 +401,14 @@
 				},
 				{
 					"command": "_projectManager.pin",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.showPinnedGitOnly",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.showAllGit",
 					"when": "false"
 				},
 				{
@@ -542,6 +560,16 @@
 				{
 					"command": "_projectManager.deleteAllArchived",
 					"when": "view == projectsExplorerArchived",
+					"group": "navigation"
+				},
+				{
+					"command": "_projectManager.showPinnedGitOnly",
+					"when": "view == projectsExplorerGit && !projectManager.gitShowPinnedOnly",
+					"group": "navigation"
+				},
+				{
+					"command": "_projectManager.showAllGit",
+					"when": "view == projectsExplorerGit && projectManager.gitShowPinnedOnly",
 					"group": "navigation"
 				},
 				{

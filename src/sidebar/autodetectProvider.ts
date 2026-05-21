@@ -10,6 +10,7 @@ import { CustomProjectLocator } from "../autodetect/abstractLocator";
 import { ProjectNode } from "./nodes";
 import { Container } from "../core/container";
 import { addParentFolderToDuplicates } from "../utils/path";
+import { getPinnedGitRepos, isShowingPinnedOnly } from "../commands/gitPinning";
 
 function getGitRemoteUrl(projectPath: string): string | undefined {
     try {
@@ -100,10 +101,15 @@ export class AutodetectProvider implements vscode.TreeDataProvider<ProjectNode> 
                         return 0;
                     });
 
-                    const deduplicated = deduplicateByRemote(this.projectSource.projectList);
-                    const projectsWithParent = addParentFolderToDuplicates(deduplicated);
+                    let deduplicated = deduplicateByRemote(this.projectSource.projectList);
 
                     const isGit = this.projectSource.displayName === "Git";
+                    if (isGit && isShowingPinnedOnly()) {
+                        const pinned = getPinnedGitRepos();
+                        deduplicated = deduplicated.filter(p => pinned.has(p.fullPath));
+                    }
+
+                    const projectsWithParent = addParentFolderToDuplicates(deduplicated);
 
                     for (let index = 0; index < projectsWithParent.length; index++) {
                         const dirinfo = projectsWithParent[ index ];
