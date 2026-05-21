@@ -103,6 +103,8 @@ export class AutodetectProvider implements vscode.TreeDataProvider<ProjectNode> 
                     const deduplicated = deduplicateByRemote(this.projectSource.projectList);
                     const projectsWithParent = addParentFolderToDuplicates(deduplicated);
 
+                    const isGit = this.projectSource.displayName === "Git";
+
                     for (let index = 0; index < projectsWithParent.length; index++) {
                         const dirinfo = projectsWithParent[ index ];
 
@@ -111,11 +113,11 @@ export class AutodetectProvider implements vscode.TreeDataProvider<ProjectNode> 
                                 name: dirinfo.name,
                                 detail: dirinfo.parent,
                                 path: dirinfo.path
-                            }, {
+                            }, isGit ? undefined : {
                                 command: "_projectManager.open",
                                 title: "",
                                 arguments: [ dirinfo.path, dirinfo.name ],
-                            }));
+                            }, !isGit));
                     }
                 }
 

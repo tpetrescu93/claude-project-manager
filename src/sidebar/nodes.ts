@@ -23,7 +23,8 @@ export class ProjectNode extends TreeItem {
         public readonly collapsibleState: TreeItemCollapsibleState,
         public readonly icon: string | undefined,
         public readonly preview: ProjectPreview,
-        public readonly command?: Command
+        public readonly command?: Command,
+        public readonly showStatus: boolean = true,
     ) {
         super(label, collapsibleState);
 
@@ -35,7 +36,7 @@ export class ProjectNode extends TreeItem {
         }
 
         this.resourceUri = Uri.from({
-            scheme: 'projectManager-view',
+            scheme: this.showStatus ? 'projectManager-view' : 'projectManager-readonly-view',
             path: preview.path
         });
 
@@ -47,6 +48,10 @@ export class ProjectNode extends TreeItem {
 
     public updateIcon(): void {
         if (!this.icon) { return; }
+        if (!this.showStatus) {
+            this.iconPath = this.getIconPath(this.icon, this.preview.path);
+            return;
+        }
         const needsInput = isClaudeWaitingForInputForPath(this.preview.path);
         const thinking = isClaudeThinkingForPath(this.preview.path);
         if (needsInput) {
