@@ -28,6 +28,29 @@ const claudeNeedsInputCache = new Map<string, boolean>();
 const statusChangeEmitter = new EventEmitter<void>();
 export const onStatusChange = statusChangeEmitter.event;
 
+const STATUS_CACHE_KEY = "projectStatuses.statusCache";
+const PR_URL_CACHE_KEY = "projectStatuses.prUrlCache";
+
+function loadCachesFromGlobalState(): void {
+    const status = Container.context.globalState.get<Record<string, PrStatus>>(STATUS_CACHE_KEY, {});
+    for (const [ rootPath, value ] of Object.entries(status)) {
+        statusCache.set(rootPath, value);
+    }
+    const urls = Container.context.globalState.get<Record<string, string>>(PR_URL_CACHE_KEY, {});
+    for (const [ rootPath, value ] of Object.entries(urls)) {
+        prUrlCache.set(rootPath, value);
+    }
+}
+
+function persistCachesToGlobalState(): void {
+    const status: Record<string, PrStatus> = {};
+    for (const [ k, v ] of statusCache) { status[ k ] = v; }
+    const urls: Record<string, string> = {};
+    for (const [ k, v ] of prUrlCache) { urls[ k ] = v; }
+    Container.context.globalState.update(STATUS_CACHE_KEY, status);
+    Container.context.globalState.update(PR_URL_CACHE_KEY, urls);
+}
+
 export function getPrStatusForPath(rootPath: string): PrStatus {
     return statusCache.get(rootPath) ?? null;
 }
@@ -154,6 +177,7 @@ async function updateGitStatuses(projectStorage: ProjectStorage, providerManager
                 changed = true;
             }
             if (changed) {
+                persistCachesToGlobalState();
                 statusChangeEmitter.fire();
                 providerManager.refreshStorageProjectNode(p.rootPath);
             }
@@ -187,6 +211,10 @@ async function updateClaudeStatuses(projectStorage: ProjectStorage, providerMana
 }
 
 export function registerProjectStatuses(projectStorage: ProjectStorage, providerManager: Providers) {
+    // Restore PR status / URL caches from disk so icons render immediately on activation
+    loadCachesFromGlobalState();
+    providerManager.refreshStorageTreeView();
+
     // Clean up any leftover PR prefixes from the old cron in names on startup
     if (cleanLegacyPrefixes(projectStorage)) {
         projectStorage.save();
