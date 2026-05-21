@@ -77,12 +77,18 @@ function stripPrPrefix(name: string): string {
     return base;
 }
 
-async function getPrStatus(projectPath: string): Promise<{ status: PrStatus; url?: string }> {
+async function getPrStatus(projectPath: string): Promise<{ status: PrStatus; url?: string } | undefined> {
+    let branch: string;
     try {
-        const branch = (await execAsync("git rev-parse --abbrev-ref HEAD", { cwd: projectPath, timeout: 5000 })).stdout.trim();
-        if (branch === "HEAD" || branch === "master" || branch === "main" || branch === "develop") {
-            return { status: null };
-        }
+        branch = (await execAsync("git rev-parse --abbrev-ref HEAD", { cwd: projectPath, timeout: 5000 })).stdout.trim();
+    } catch {
+        // Not a git repo / git command failed — treat as confirmed "no status"
+        return { status: null };
+    }
+    if (branch === "HEAD" || branch === "master" || branch === "main" || branch === "develop") {
+        return { status: null };
+    }
+    try {
 
         // Open PR with CI status
         const openResult = await execAsync(
@@ -115,7 +121,8 @@ async function getPrStatus(projectPath: string): Promise<{ status: PrStatus; url
 
         return { status: "no_pr" };
     } catch {
-        return { status: null };
+        // gh failed — return undefined so the caller keeps the previous cache entry
+        return undefined;
     }
 }
 
@@ -159,6 +166,7 @@ async function updateGitStatuses(projectStorage: ProjectStorage, providerManager
     // Fire each gh call independently and refresh only the affected project's tree node
     projects.forEach(p => {
         getPrStatus(p.rootPath).then(result => {
+            if (!result) { return; } // gh failed — keep previous cache entry
             const newStatus = result.status;
             const newUrl = result.url;
             const oldStatus = statusCache.get(p.rootPath) ?? null;
