@@ -21,6 +21,46 @@ function getGitRemoteUrl(projectPath: string): string | undefined {
     }
 }
 
+const GIT_ITEM_ORDER_KEY = "gitItemOrder";
+
+function getGitItemOrder(): string[] {
+    return Container.context.globalState.get<string[]>(GIT_ITEM_ORDER_KEY, []);
+}
+
+async function moveGitItem(fromPath: string, toPath: string): Promise<void> {
+    const order = [ ...getGitItemOrder() ];
+    let fromIdx = order.indexOf(fromPath);
+    let toIdx = order.indexOf(toPath);
+    // Items not in the order list have an implicit position at the end.
+    if (fromIdx < 0) {
+        order.push(fromPath);
+        fromIdx = order.length - 1;
+    }
+    if (toIdx < 0) {
+        order.push(toPath);
+        toIdx = order.length - 1;
+    }
+    if (fromIdx === toIdx) { return; }
+    const [ moved ] = order.splice(fromIdx, 1);
+    if (toIdx > fromIdx) { toIdx--; }
+    order.splice(toIdx, 0, moved);
+    await Container.context.globalState.update(GIT_ITEM_ORDER_KEY, order);
+}
+
+function sortByGitOrder(projects: AutodetectedProjectInfo[]): AutodetectedProjectInfo[] {
+    const order = getGitItemOrder();
+    if (order.length === 0) { return projects; }
+    const positions = new Map<string, number>();
+    order.forEach((p, i) => positions.set(p, i));
+    return [ ...projects ].sort((a, b) => {
+        const pa = positions.has(a.fullPath) ? positions.get(a.fullPath)! : Number.MAX_SAFE_INTEGER;
+        const pb = positions.has(b.fullPath) ? positions.get(b.fullPath)! : Number.MAX_SAFE_INTEGER;
+        if (pa !== pb) { return pa - pb; }
+        // Both not in order list — fall back to alphabetical
+        return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+    });
+}
+
 export function deduplicateByRemote(projects: AutodetectedProjectInfo[]): AutodetectedProjectInfo[] {
     const remoteMap = new Map<string, AutodetectedProjectInfo>();
 
@@ -40,7 +80,12 @@ export function deduplicateByRemote(projects: AutodetectedProjectInfo[]): Autode
     return [ ...remoteMap.values() ];
 }
 
-export class AutodetectProvider implements vscode.TreeDataProvider<ProjectNode> {
+export class AutodetectProvider implements vscode.TreeDataProvider<ProjectNode>, vscode.TreeDragAndDropController<ProjectNode> {
+
+    private static readonly DRAG_MIME_TYPE = "application/vnd.code.tree.projectsExplorerGit";
+
+    public readonly dropMimeTypes: readonly string[] = [ AutodetectProvider.DRAG_MIME_TYPE ];
+    public readonly dragMimeTypes: readonly string[] = [ AutodetectProvider.DRAG_MIME_TYPE ];
 
     public readonly onDidChangeTreeData: vscode.Event<ProjectNode | void>;
 
@@ -54,6 +99,24 @@ export class AutodetectProvider implements vscode.TreeDataProvider<ProjectNode> 
 
     public refresh(): void {
         this.internalOnDidChangeTreeData.fire();
+    }
+
+    public handleDrag(source: readonly ProjectNode[], dataTransfer: vscode.DataTransfer): void {
+        if (this.projectSource.displayName !== "Git") { return; }
+        const paths = source.map(n => n.preview.path);
+        if (paths.length === 0) { return; }
+        dataTransfer.set(AutodetectProvider.DRAG_MIME_TYPE, new vscode.DataTransferItem(paths));
+    }
+
+    public async handleDrop(target: ProjectNode | undefined, dataTransfer: vscode.DataTransfer): Promise<void> {
+        if (this.projectSource.displayName !== "Git") { return; }
+        if (!target) { return; }
+        const transferItem = dataTransfer.get(AutodetectProvider.DRAG_MIME_TYPE);
+        if (!transferItem) { return; }
+        const sourcePaths: string[] = transferItem.value;
+        if (!sourcePaths || sourcePaths.length === 0) { return; }
+        await moveGitItem(sourcePaths[ 0 ], target.preview.path);
+        this.refresh();
     }
 
     public getTreeItem(element: ProjectNode): vscode.TreeItem {
@@ -107,6 +170,9 @@ export class AutodetectProvider implements vscode.TreeDataProvider<ProjectNode> 
                     if (isGit && isShowingPinnedOnly()) {
                         const pinned = getPinnedGitRepos();
                         deduplicated = deduplicated.filter(p => pinned.has(p.fullPath));
+                    }
+                    if (isGit) {
+                        deduplicated = sortByGitOrder(deduplicated);
                     }
 
                     const projectsWithParent = addParentFolderToDuplicates(deduplicated);

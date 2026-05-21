@@ -61,6 +61,7 @@ export class Providers {
         });
         this.gitTreeView = vscode.window.createTreeView("projectsExplorerGit", {
             treeDataProvider: this.gitProvider,
+            dragAndDropController: this.gitProvider,
             showCollapseAll: false
         });
         this.mercurialTreeView = vscode.window.createTreeView("projectsExplorerMercurial", {
