@@ -67,7 +67,7 @@ export class ProjectNode extends TreeItem {
         } else {
             const prStatus = getPrStatusForPath(this.preview.path);
             const prIcon = ProjectNode.getPrStatusIcon(prStatus);
-            this.iconPath = prIcon ?? this.getIconPath(this.icon, this.preview.path);
+            this.iconPath = prIcon ?? new ThemeIcon("circle-outline");
         }
     }
 
