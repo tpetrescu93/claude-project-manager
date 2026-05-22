@@ -98,8 +98,19 @@ async function getPrStatus(projectPath: string): Promise<{ status: PrStatus; url
         const openData = JSON.parse(openResult.stdout);
         if (openData.length > 0) {
             const url = openData[ 0 ].url as string | undefined;
-            const checks = openData[ 0 ].statusCheckRollup || [];
-            if (checks.length === 0) { return { status: "open_pending", url }; }
+            const rawChecks = openData[ 0 ].statusCheckRollup || [];
+            if (rawChecks.length === 0) { return { status: "open_pending", url }; }
+            // gh returns every historical run of every check. Keep only the latest run
+            // per check name so re-runs supersede earlier failures (matches GitHub UI behaviour).
+            const latestByName = new Map<string, any>();
+            for (const c of rawChecks) {
+                const name = c.name || "";
+                const ts = Date.parse(c.completedAt || c.startedAt || "") || 0;
+                const existing = latestByName.get(name);
+                const existingTs = existing ? (Date.parse(existing.completedAt || existing.startedAt || "") || 0) : -1;
+                if (!existing || ts >= existingTs) { latestByName.set(name, c); }
+            }
+            const checks = Array.from(latestByName.values());
             const statuses = new Set(checks.map((c: any) => c.status || ""));
             const conclusions = new Set(checks.map((c: any) => c.conclusion || ""));
             if (Array.from(statuses).some(s => s !== "COMPLETED")) { return { status: "open_pending", url }; }
