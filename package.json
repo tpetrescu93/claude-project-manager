@@ -361,7 +361,8 @@
 			},
 			{
 				"command": "_projectManager.cloneProject",
-				"title": "%projectManager.commands.cloneProject.title%"
+				"title": "%projectManager.commands.cloneProject.title%",
+				"icon": "$(add)"
 			},
 			{
 				"command": "_projectManager.archiveProject",
@@ -701,6 +702,11 @@
 				},
 				{
 					"command": "_projectManager.pin",
+					"when": "view == projectsExplorerGit && viewItem == ProjectNodeKind",
+					"group": "inline"
+				},
+				{
+					"command": "_projectManager.cloneProject",
 					"when": "view == projectsExplorerGit && viewItem == ProjectNodeKind",
 					"group": "inline"
 				},
