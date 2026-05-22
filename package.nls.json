@@ -38,6 +38,7 @@
     "projectManager.commands.openPR.title": "Open PR",
     "projectManager.commands.openClaudeSession.title": "Open Claude Session",
     "projectManager.commands.pin.title": "Pin",
+    "projectManager.commands.unpin.title": "Unpin",
     "projectManager.commands.showPinnedGitOnly.title": "Show Pinned Only",
     "projectManager.commands.showAllGit.title": "Show All",
     "projectManager.commands.revealInFinder#sideBar.title": "Reveal in Finder",

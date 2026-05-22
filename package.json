@@ -279,7 +279,12 @@
 			{
 				"command": "_projectManager.pin",
 				"title": "%projectManager.commands.pin.title%",
-				"icon": "$(pin)"
+				"icon": "images/ico-pin-filled.svg"
+			},
+			{
+				"command": "_projectManager.unpin",
+				"title": "%projectManager.commands.unpin.title%",
+				"icon": "images/ico-pin-outline.svg"
 			},
 			{
 				"command": "_projectManager.showPinnedGitOnly",
@@ -402,6 +407,10 @@
 				},
 				{
 					"command": "_projectManager.pin",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.unpin",
 					"when": "false"
 				},
 				{
@@ -706,43 +715,48 @@
 					"group": "inline"
 				},
 				{
+					"command": "_projectManager.unpin",
+					"when": "view == projectsExplorerGit && viewItem == ProjectNodeKindPinned",
+					"group": "inline"
+				},
+				{
 					"command": "_projectManager.cloneProject",
-					"when": "view == projectsExplorerGit && viewItem == ProjectNodeKind",
+					"when": "view == projectsExplorerGit && viewItem =~ /^ProjectNodeKind/",
 					"group": "inline"
 				},
 				{
 					"command": "_projectManager.open",
-					"when": "view =~ /projectsExplorer(Favorites|VSCode|Git|SVN|Any|Mercurial)/ && viewItem == ProjectNodeKind",
+					"when": "view =~ /projectsExplorer(Favorites|VSCode|Git|SVN|Any|Mercurial)/ && viewItem =~ /^ProjectNodeKind/",
 					"group": "navigation"
 				},
 				{
 					"command": "_projectManager.openInNewWindow",
-					"when": "view =~ /projectsExplorer(Favorites|VSCode|Git|SVN|Any|Mercurial)/ && viewItem == ProjectNodeKind",
+					"when": "view =~ /projectsExplorer(Favorites|VSCode|Git|SVN|Any|Mercurial)/ && viewItem =~ /^ProjectNodeKind/",
 					"group": "navigation"
 				},
 				{
 					"command": "_projectManager.revealInFinder#sideBar",
-					"when": "view =~ /projectsExplorer(Favorites|VSCode|Git|SVN|Any|Mercurial)/ && viewItem == ProjectNodeKind && isMac",
+					"when": "view =~ /projectsExplorer(Favorites|VSCode|Git|SVN|Any|Mercurial)/ && viewItem =~ /^ProjectNodeKind/ && isMac",
 					"group": "navigation@2"
 				},
 				{
 					"command": "_projectManager.revealInExplorer#sideBar",
-					"when": "view =~ /projectsExplorer(Favorites|VSCode|Git|SVN|Any|Mercurial)/ && viewItem == ProjectNodeKind && isWindows",
+					"when": "view =~ /projectsExplorer(Favorites|VSCode|Git|SVN|Any|Mercurial)/ && viewItem =~ /^ProjectNodeKind/ && isWindows",
 					"group": "navigation@2"
 				},
 				{
 					"command": "_projectManager.revealInFileManager#sideBar",
-					"when": "view =~ /projectsExplorer(Favorites|VSCode|Git|SVN|Any|Mercurial)/ && viewItem == ProjectNodeKind && isLinux",
+					"when": "view =~ /projectsExplorer(Favorites|VSCode|Git|SVN|Any|Mercurial)/ && viewItem =~ /^ProjectNodeKind/ && isLinux",
 					"group": "navigation@2"
 				},
 				{
 					"command": "_projectManager.openClaudeSession",
-					"when": "view =~ /projectsExplorer(Favorites|Git)/ && viewItem == ProjectNodeKind",
+					"when": "view =~ /projectsExplorer(Favorites|Git)/ && viewItem =~ /^ProjectNodeKind/",
 					"group": "favorites"
 				},
 				{
 					"command": "_projectManager.cloneProject",
-					"when": "view =~ /projectsExplorer(Favorites|Git)/ && viewItem == ProjectNodeKind",
+					"when": "view =~ /projectsExplorer(Favorites|Git)/ && viewItem =~ /^ProjectNodeKind/",
 					"group": "favorites"
 				},
 				{
@@ -772,7 +786,7 @@
 				},
 				{
 					"command": "projectManager.addToWorkspace#sideBar",
-					"when": "view =~ /projectsExplorer(Favorites|VSCode|Git|SVN|Any|Mercurial)/ && viewItem == ProjectNodeKind",
+					"when": "view =~ /projectsExplorer(Favorites|VSCode|Git|SVN|Any|Mercurial)/ && viewItem =~ /^ProjectNodeKind/",
 					"group": "workspace"
 				},
 				{
@@ -783,6 +797,11 @@
 				{
 					"command": "_projectManager.pin",
 					"when": "view == projectsExplorerGit && viewItem == ProjectNodeKind",
+					"group": "workspace"
+				},
+				{
+					"command": "_projectManager.unpin",
+					"when": "view == projectsExplorerGit && viewItem == ProjectNodeKindPinned",
 					"group": "workspace"
 				}
 			],

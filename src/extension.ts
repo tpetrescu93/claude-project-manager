@@ -154,12 +154,14 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("_projectManager.renameProject", (node) => renameProject(node));
     vscode.commands.registerCommand("_projectManager.editTags", (node) => editTags(node));
     vscode.commands.registerCommand("projectManager.addToFavorites", (node) => saveProject(node));
-    vscode.commands.registerCommand("_projectManager.pin", async (node) => {
+    const pinToggleHandler = async (node: any) => {
         const rootPath: string = node?.preview?.path ?? node?.command?.arguments?.[0];
         if (!rootPath) { return; }
         await toggleGitRepoPin(rootPath);
         providerManager.gitProvider.refresh();
-    });
+    };
+    vscode.commands.registerCommand("_projectManager.pin", pinToggleHandler);
+    vscode.commands.registerCommand("_projectManager.unpin", pinToggleHandler);
     const toggleGitPinnedOnly = async () => {
         await toggleShowPinnedOnly();
         providerManager.gitProvider.refresh();
