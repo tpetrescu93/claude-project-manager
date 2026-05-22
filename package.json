@@ -498,6 +498,10 @@
 					"when": "false"
 				},
 				{
+					"command": "projectManager.filterProjectsByTag",
+					"when": "false"
+				},
+				{
 					"command": "projectManager.listFavoriteProjects#sideBarFavorites",
 					"when": "false"
 				},
@@ -594,12 +598,12 @@
 				},
 				{
 					"command": "_projectManager.viewAsTags#sideBarFavorites",
-					"when": "view == projectsExplorerFavorites && projectManager.viewAsList",
+					"when": "false",
 					"group": "navigation@12"
 				},
 				{
 					"command": "_projectManager.viewAsList#sideBarFavorites",
-					"when": "view == projectsExplorerFavorites && !projectManager.viewAsList",
+					"when": "false",
 					"group": "navigation@13"
 				},
 				{
@@ -609,7 +613,7 @@
 				},
 				{
 					"command": "projectManager.filterProjectsByTag#sideBar",
-					"when": "view == projectsExplorerFavorites",
+					"when": "false",
 					"group": "navigation@14"
 				},
 				{
@@ -781,7 +785,7 @@
 				},
 				{
 					"command": "_projectManager.editTags",
-					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
+					"when": "false",
 					"group": "favorites"
 				},
 				{
@@ -815,10 +819,12 @@
 			"projectManager.sideBar.favorites.title": [
 				{
 					"command": "_projectManager.viewAsList#sideBarFavorites",
+					"when": "false",
 					"group": "1_projectManager#sideBarFavorites"
 				},
 				{
 					"command": "_projectManager.viewAsTags#sideBarFavorites",
+					"when": "false",
 					"group": "1_projectManager#sideBarFavorites"
 				},
 				{
