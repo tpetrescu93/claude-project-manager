@@ -277,6 +277,11 @@
 				"icon": "$(link-external)"
 			},
 			{
+				"command": "_projectManager.postPrToSlack",
+				"title": "%projectManager.commands.postPrToSlack.title%",
+				"icon": "$(comment-discussion)"
+			},
+			{
 				"command": "_projectManager.openClaudeSession",
 				"title": "%projectManager.commands.openClaudeSession.title%"
 			},
@@ -403,6 +408,10 @@
 				},
 				{
 					"command": "_projectManager.openPR",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.postPrToSlack",
 					"when": "false"
 				},
 				{
@@ -718,6 +727,11 @@
 			"view/item/context": [
 				{
 					"command": "_projectManager.openPR",
+					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
+					"group": "inline"
+				},
+				{
+					"command": "_projectManager.postPrToSlack",
 					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
 					"group": "inline"
 				},

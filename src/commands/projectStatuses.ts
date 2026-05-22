@@ -10,6 +10,7 @@ import { EventEmitter, workspace } from "vscode";
 import { Container } from "../core/container";
 import { ProjectStorage } from "../storage/storage";
 import { Providers } from "../sidebar/providers";
+import { reactToMergedPr } from "./reactToMergedPr";
 
 const execAsync = promisify(exec);
 
@@ -198,6 +199,9 @@ async function updateGitStatuses(projectStorage: ProjectStorage, providerManager
             if (newStatus !== oldStatus) {
                 statusCache.set(p.rootPath, newStatus);
                 changed = true;
+                if (newStatus === "merged" && oldStatus !== "merged") {
+                    reactToMergedPr(p.rootPath).catch(() => { /* logged inside */ });
+                }
             }
             if (newUrl !== oldUrl) {
                 if (newUrl) {
