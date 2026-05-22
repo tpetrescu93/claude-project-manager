@@ -5,6 +5,7 @@
 
 import { workspace } from "vscode";
 import { Container } from "../core/container";
+import { getPrStatusForPath, isClaudeThinkingForPath, isClaudeWaitingForInputForPath, PrStatus } from "../commands/projectStatuses";
 import { Stack } from "./stack";
 
 function sortByName(items: any[]): any[] {
@@ -67,6 +68,33 @@ function sortByRecent(items: any[], stack: Stack): any[] {
     return loadedProjects;
 }
 
+function statusRank(path: string): number {
+    if (isClaudeWaitingForInputForPath(path)) { return 0; }
+    if (isClaudeThinkingForPath(path)) { return 1; }
+    const pr: PrStatus = getPrStatusForPath(path);
+    switch (pr) {
+        case "open_failing": return 2;
+        case "open_pending": return 3;
+        case "open_passing": return 4;
+        case "merged": return 5;
+        case "no_pr": return 6;
+        default: return 7;
+    }
+}
+
+function sortByStatus(items: any[]): any[] {
+    return items.sort((n1, n2) => {
+        const r1 = statusRank(n1.description);
+        const r2 = statusRank(n2.description);
+        if (r1 !== r2) { return r1 - r2; }
+        const l1 = n1.label.replace(/\$\(\w*(-)*\w*\)\s/, "").toLowerCase();
+        const l2 = n2.label.replace(/\$\(\w*(-)*\w*\)\s/, "").toLowerCase();
+        if (l1 > l2) { return 1; }
+        if (l1 < l2) { return -1; }
+        return 0;
+    });
+}
+
 export function sortProjects(itemsToShow) {
     let newItemsSorted = [];
     const criteria = workspace.getConfiguration("projectManager").get<string>("sortList", "Name");
@@ -81,6 +109,10 @@ export function sortProjects(itemsToShow) {
 
         case "Recent":
             newItemsSorted = sortByRecent(itemsToShow, Container.stack);
+            break;
+
+        case "Status":
+            newItemsSorted = sortByStatus(itemsToShow);
             break;
 
         default:

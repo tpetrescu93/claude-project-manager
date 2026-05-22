@@ -17,6 +17,7 @@ export function registerSortBy() {
     Container.context.subscriptions.push(commands.registerCommand("_projectManager.sortByName#sideBarFavorites", () => toggleSortBy("Name")));
     Container.context.subscriptions.push(commands.registerCommand("_projectManager.sortByPath#sideBarFavorites", () => toggleSortBy("Path")));
     Container.context.subscriptions.push(commands.registerCommand("_projectManager.sortByRecent#sideBarFavorites", () => toggleSortBy("Recent")));
+    Container.context.subscriptions.push(commands.registerCommand("_projectManager.sortByStatus#sideBarFavorites", () => toggleSortBy("Status")));
 }
 
 export function updateSortByContext() {

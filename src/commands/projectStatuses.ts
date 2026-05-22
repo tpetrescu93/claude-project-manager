@@ -6,7 +6,7 @@
 import * as path from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { EventEmitter } from "vscode";
+import { EventEmitter, workspace } from "vscode";
 import { Container } from "../core/container";
 import { ProjectStorage } from "../storage/storage";
 import { Providers } from "../sidebar/providers";
@@ -27,6 +27,18 @@ const claudeThinkingCache = new Map<string, boolean>();
 const claudeNeedsInputCache = new Map<string, boolean>();
 const statusChangeEmitter = new EventEmitter<void>();
 export const onStatusChange = statusChangeEmitter.event;
+
+function refreshAfterStatusChange(providerManager: Providers, rootPath: string) {
+    // When sort is by status, a single project's status flipping changes its
+    // position in the list — a targeted node refresh isn't enough, the whole
+    // tree needs to re-sort. Otherwise stick with the cheap per-node refresh.
+    const sortBy = workspace.getConfiguration("projectManager").get<string>("sortList", "Name");
+    if (sortBy === "Status") {
+        providerManager.refreshStorageTreeView();
+    } else {
+        providerManager.refreshStorageProjectNode(rootPath);
+    }
+}
 
 const STATUS_CACHE_KEY = "projectStatuses.statusCache";
 const PR_URL_CACHE_KEY = "projectStatuses.prUrlCache";
@@ -198,7 +210,7 @@ async function updateGitStatuses(projectStorage: ProjectStorage, providerManager
             if (changed) {
                 persistCachesToGlobalState();
                 statusChangeEmitter.fire();
-                providerManager.refreshStorageProjectNode(p.rootPath);
+                refreshAfterStatusChange(providerManager, p.rootPath);
             }
         }).catch(() => { /* swallow */ });
     });
@@ -223,7 +235,7 @@ async function updateClaudeStatuses(projectStorage: ProjectStorage, providerMana
             }
             if (changed) {
                 statusChangeEmitter.fire();
-                providerManager.refreshStorageProjectNode(p.rootPath);
+                refreshAfterStatusChange(providerManager, p.rootPath);
             }
         }).catch(() => { /* swallow */ });
     });

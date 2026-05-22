@@ -166,6 +166,11 @@
 				"enablement": "projectManager.sortBy != Recent"
 			},
 			{
+				"command": "_projectManager.sortByStatus#sideBarFavorites",
+				"title": "%projectManager.commands.sortByStatus#sideBarFavorites.title%",
+				"enablement": "projectManager.sortBy != Status"
+			},
+			{
 				"command": "projectManager.filterProjectsByTag",
 				"title": "%projectManager.commands.filterProjectsByTag.title%"
 			},
@@ -490,6 +495,10 @@
 				},
 				{
 					"command": "_projectManager.sortByRecent#sideBarFavorites",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.sortByStatus#sideBarFavorites",
 					"when": "false"
 				},
 				{
@@ -841,6 +850,10 @@
 				{
 					"command": "_projectManager.sortByRecent#sideBarFavorites",
 					"group": "2_projectManager#sideBarFavorites"
+				},
+				{
+					"command": "_projectManager.sortByStatus#sideBarFavorites",
+					"group": "2_projectManager#sideBarFavorites"
 				}
 			]
 		},
@@ -878,7 +891,8 @@
 							"Saved",
 							"Name",
 							"Path",
-							"Recent"
+							"Recent",
+							"Status"
 						],
 						"scope": "application"
 					},
