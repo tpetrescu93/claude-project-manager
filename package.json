@@ -726,14 +726,14 @@
 			],
 			"view/item/context": [
 				{
-					"command": "_projectManager.openPR",
-					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
-					"group": "inline"
-				},
-				{
 					"command": "_projectManager.postPrToSlack",
 					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
-					"group": "inline"
+					"group": "inline@1"
+				},
+				{
+					"command": "_projectManager.openPR",
+					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
+					"group": "inline@2"
 				},
 				{
 					"command": "_projectManager.pin",
