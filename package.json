@@ -384,11 +384,13 @@
 			},
 			{
 				"command": "_projectManager.restoreProject",
-				"title": "%projectManager.commands.restoreProject.title%"
+				"title": "%projectManager.commands.restoreProject.title%",
+				"icon": "$(discard)"
 			},
 			{
 				"command": "_projectManager.deleteArchivedProject",
-				"title": "%projectManager.commands.deleteArchivedProject.title%"
+				"title": "%projectManager.commands.deleteArchivedProject.title%",
+				"icon": "$(trash)"
 			},
 			{
 				"command": "_projectManager.deleteAllArchived",
@@ -789,6 +791,16 @@
 					"command": "_projectManager.archiveProject",
 					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
 					"group": "favorites"
+				},
+				{
+					"command": "_projectManager.restoreProject",
+					"when": "view == projectsExplorerArchived && viewItem == ArchivedProjectNodeKind",
+					"group": "inline@1"
+				},
+				{
+					"command": "_projectManager.deleteArchivedProject",
+					"when": "view == projectsExplorerArchived && viewItem == ArchivedProjectNodeKind",
+					"group": "inline@2"
 				},
 				{
 					"command": "_projectManager.restoreProject",
