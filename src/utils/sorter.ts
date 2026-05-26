@@ -73,12 +73,13 @@ function statusRank(path: string): number {
     if (isClaudeThinkingForPath(path)) { return 1; }
     const pr: PrStatus = getPrStatusForPath(path);
     switch (pr) {
-        case "open_failing": return 2;
-        case "open_pending": return 3;
-        case "open_passing": return 4;
-        case "merged": return 5;
-        case "no_pr": return 6;
-        default: return 7;
+        case "open_conflicting": return 2;
+        case "open_failing": return 3;
+        case "open_pending": return 4;
+        case "open_passing": return 5;
+        case "merged": return 6;
+        case "no_pr": return 7;
+        default: return 8;
     }
 }
 

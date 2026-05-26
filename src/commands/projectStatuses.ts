@@ -20,7 +20,7 @@ const MERGED_WINDOW_DAYS = 30;
 const GIT_INTERVAL_MS = 60_000;
 const CLAUDE_INTERVAL_MS = 2_000;
 
-export type PrStatus = "open_passing" | "open_failing" | "open_pending" | "merged" | "no_pr" | null;
+export type PrStatus = "open_passing" | "open_failing" | "open_pending" | "open_conflicting" | "merged" | "no_pr" | null;
 
 const statusCache = new Map<string, PrStatus>();
 const prUrlCache = new Map<string, string>();
@@ -105,12 +105,15 @@ async function getPrStatus(projectPath: string): Promise<{ status: PrStatus; url
 
         // Open PR with CI status
         const openResult = await execAsync(
-            `gh pr list --state open --head "${branch}" --limit 1 --json number,url,statusCheckRollup`,
+            `gh pr list --state open --head "${branch}" --limit 1 --json number,url,statusCheckRollup,mergeable`,
             { cwd: projectPath, timeout: 10_000 }
         );
         const openData = JSON.parse(openResult.stdout);
         if (openData.length > 0) {
             const url = openData[ 0 ].url as string | undefined;
+            // Conflicts block the merge regardless of CI; surface them first.
+            // UNKNOWN means GitHub hasn't finished computing mergeability yet — ignore.
+            if (openData[ 0 ].mergeable === "CONFLICTING") { return { status: "open_conflicting", url }; }
             const rawChecks = openData[ 0 ].statusCheckRollup || [];
             if (rawChecks.length === 0) { return { status: "open_pending", url }; }
             // gh returns every historical run of every check. Keep only the latest run

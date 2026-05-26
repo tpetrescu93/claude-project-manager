@@ -84,6 +84,8 @@ export class ProjectNode extends TreeItem {
                     light: Uri.joinPath(Container.context.extensionUri, "images/ico-status-failing-light.svg"),
                     dark: Uri.joinPath(Container.context.extensionUri, "images/ico-status-failing-dark.svg")
                 };
+            case "open_conflicting":
+                return Uri.joinPath(Container.context.extensionUri, "images/ico-status-conflict.svg");
             case "merged":
                 return {
                     light: Uri.joinPath(Container.context.extensionUri, "images/ico-status-merged-light.svg"),
