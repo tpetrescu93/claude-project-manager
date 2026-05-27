@@ -74,12 +74,14 @@ function statusRank(path: string): number {
     const pr: PrStatus = getPrStatusForPath(path);
     switch (pr) {
         case "open_conflicting": return 2;
-        case "open_failing": return 3;
-        case "open_pending": return 4;
-        case "open_passing": return 5;
-        case "merged": return 6;
-        case "no_pr": return 7;
-        default: return 8;
+        case "changes_requested": return 3;
+        case "open_failing": return 4;
+        case "open_pending": return 5;
+        case "open_approved": return 6;
+        case "open_passing": return 7;
+        case "merged": return 8;
+        case "no_pr": return 9;
+        default: return 10;
     }
 }
 

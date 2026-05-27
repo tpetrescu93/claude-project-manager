@@ -79,6 +79,10 @@ export class ProjectNode extends TreeItem {
                 return new ThemeIcon("sync~spin", new ThemeColor("charts.yellow"));
             case "open_passing":
                 return new ThemeIcon("pass-filled", new ThemeColor("charts.green"));
+            case "open_approved":
+                return new ThemeIcon("check-all", new ThemeColor("charts.green"));
+            case "changes_requested":
+                return new ThemeIcon("request-changes", new ThemeColor("charts.red"));
             case "open_failing":
                 return {
                     light: Uri.joinPath(Container.context.extensionUri, "images/ico-status-failing-light.svg"),

@@ -20,7 +20,7 @@ const MERGED_WINDOW_DAYS = 30;
 const GIT_INTERVAL_MS = 60_000;
 const CLAUDE_INTERVAL_MS = 2_000;
 
-export type PrStatus = "open_passing" | "open_failing" | "open_pending" | "open_conflicting" | "merged" | "no_pr" | null;
+export type PrStatus = "open_passing" | "open_approved" | "changes_requested" | "open_failing" | "open_pending" | "open_conflicting" | "merged" | "no_pr" | null;
 
 const statusCache = new Map<string, PrStatus>();
 const prUrlCache = new Map<string, string>();
@@ -105,15 +105,19 @@ async function getPrStatus(projectPath: string): Promise<{ status: PrStatus; url
 
         // Open PR with CI status
         const openResult = await execAsync(
-            `gh pr list --state open --head "${branch}" --limit 1 --json number,url,statusCheckRollup,mergeable`,
+            `gh pr list --state open --head "${branch}" --limit 1 --json number,url,statusCheckRollup,mergeable,reviewDecision`,
             { cwd: projectPath, timeout: 10_000 }
         );
         const openData = JSON.parse(openResult.stdout);
         if (openData.length > 0) {
             const url = openData[ 0 ].url as string | undefined;
+            const reviewDecision = openData[ 0 ].reviewDecision as string | undefined;
             // Conflicts block the merge regardless of CI; surface them first.
             // UNKNOWN means GitHub hasn't finished computing mergeability yet — ignore.
             if (openData[ 0 ].mergeable === "CONFLICTING") { return { status: "open_conflicting", url }; }
+            // A human explicitly requested changes — the strongest "do something" signal,
+            // shown ahead of CI state (the review block stands until re-approval).
+            if (reviewDecision === "CHANGES_REQUESTED") { return { status: "changes_requested", url }; }
             const rawChecks = openData[ 0 ].statusCheckRollup || [];
             if (rawChecks.length === 0) { return { status: "open_pending", url }; }
             // gh returns every historical run of every check. Keep only the latest run
@@ -131,6 +135,8 @@ async function getPrStatus(projectPath: string): Promise<{ status: PrStatus; url
             const conclusions = new Set(checks.map((c: any) => c.conclusion || ""));
             if (Array.from(statuses).some(s => s !== "COMPLETED")) { return { status: "open_pending", url }; }
             if (conclusions.has("FAILURE") || conclusions.has("ERROR") || conclusions.has("TIMED_OUT")) { return { status: "open_failing", url }; }
+            // CI is green — distinguish human-approved (ready to merge) from awaiting review.
+            if (reviewDecision === "APPROVED") { return { status: "open_approved", url }; }
             return { status: "open_passing", url };
         }
 
