@@ -74,7 +74,8 @@
 				{
 					"id": "projectsExplorerGit",
 					"name": "%projectManager.views.git.name%",
-					"when": "projectManager.canShowTreeViewGit"
+					"when": "projectManager.canShowTreeViewGit",
+					"visibility": "collapsed"
 				},
 				{
 					"id": "projectsExplorerSVN",
