@@ -30,12 +30,17 @@ export class ArchivedProvider implements vscode.TreeDataProvider<ArchivedProject
 
     public getChildren(): Thenable<ArchivedProjectNode[]> {
         const disabled = this.projectSource.disabled() || [];
-        const nodes = disabled.map(p =>
-            new ArchivedProjectNode(p.name, vscode.TreeItemCollapsibleState.None, {
+        const nodes = disabled.map(p => {
+            const path = PathUtils.expandHomePath(p.rootPath);
+            return new ArchivedProjectNode(p.name, vscode.TreeItemCollapsibleState.None, {
                 name: p.name,
-                path: PathUtils.expandHomePath(p.rootPath)
-            })
-        );
+                path
+            }, {
+                command: "_projectManager.open",
+                title: "",
+                arguments: [ path, p.name ]
+            });
+        });
         return Promise.resolve(nodes);
     }
 }
