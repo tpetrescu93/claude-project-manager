@@ -60,10 +60,7 @@ export class ProjectNode extends TreeItem {
                 dark: Uri.joinPath(Container.context.extensionUri, "images/ico-status-needsinput-dark.svg")
             };
         } else if (thinking) {
-            this.iconPath = {
-                light: Uri.joinPath(Container.context.extensionUri, "images/ico-status-thinking-light.svg"),
-                dark: Uri.joinPath(Container.context.extensionUri, "images/ico-status-thinking-dark.svg")
-            };
+            this.iconPath = Uri.joinPath(Container.context.extensionUri, "images/ico-status-thinking-swirl.svg");
         } else {
             const prStatus = getPrStatusForPath(this.preview.path);
             const prIcon = ProjectNode.getPrStatusIcon(prStatus);

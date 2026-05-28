@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="#f97316">
+  <!-- Braille spinner: cycles ⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ at 80ms/frame.
+       2×3 dot grid; each dot is on/off per frame, switched discretely. -->
+  <!-- Dot 1 (top-left)  on: ⠋⠙⠹  ⠧⠇⠏ -->
+  <circle cx="5" cy="4" r="1.4">
+    <animate attributeName="opacity" calcMode="discrete" values="1;1;1;0.15;0.15;0.15;0.15;1;1;1" dur="0.8s" repeatCount="indefinite"/>
+  </circle>
+  <!-- Dot 2 (mid-left)  on: ⠋     ⠦⠧⠇⠏ -->
+  <circle cx="5" cy="8" r="1.4">
+    <animate attributeName="opacity" calcMode="discrete" values="1;0.15;0.15;0.15;0.15;0.15;1;1;1;1" dur="0.8s" repeatCount="indefinite"/>
+  </circle>
+  <!-- Dot 3 (bot-left)  on: ⠼⠴⠦⠧⠇⠏ -->
+  <circle cx="5" cy="12" r="1.4">
+    <animate attributeName="opacity" calcMode="discrete" values="0.15;0.15;0.15;0.15;1;1;1;1;1;1" dur="0.8s" repeatCount="indefinite"/>
+  </circle>
+  <!-- Dot 4 (top-right) on: ⠋⠙⠹⠸⠼      ⠏ -->
+  <circle cx="11" cy="4" r="1.4">
+    <animate attributeName="opacity" calcMode="discrete" values="1;1;1;1;1;0.15;0.15;0.15;0.15;1" dur="0.8s" repeatCount="indefinite"/>
+  </circle>
+  <!-- Dot 5 (mid-right) on:  ⠙⠹⠸⠼⠴ -->
+  <circle cx="11" cy="8" r="1.4">
+    <animate attributeName="opacity" calcMode="discrete" values="0.15;1;1;1;1;1;0.15;0.15;0.15;0.15" dur="0.8s" repeatCount="indefinite"/>
+  </circle>
+  <!-- Dot 6 (bot-right) on:   ⠹⠸⠼⠴⠦⠧ -->
+  <circle cx="11" cy="12" r="1.4">
+    <animate attributeName="opacity" calcMode="discrete" values="0.15;0.15;1;1;1;1;1;1;0.15;0.15" dur="0.8s" repeatCount="indefinite"/>
+  </circle>
+</svg>
