@@ -11,13 +11,14 @@ import { Container } from "../core/container";
 import { ProjectStorage } from "../storage/storage";
 import { Providers } from "../sidebar/providers";
 import { reactToMergedPr } from "./reactToMergedPr";
+import { bulkFetchPrStatuses, BulkFetchInput, parseRepoFromRemote } from "./githubBulkFetch";
 
 const execAsync = promisify(exec);
 
 const STATUS_RE = /^[●✗…✓○] | [●✗…✓○]$| \[(🔁|✅|PR|merged)\]$|^\[(🔁|✅|PR|merged)\] /;
 const THINKING_RE = / \*$/;
 const MERGED_WINDOW_DAYS = 30;
-const GIT_INTERVAL_MS = 60_000;
+const GIT_INTERVAL_MS = 6_000;
 const CLAUDE_INTERVAL_MS = 2_000;
 
 export type PrStatus = "open_passing" | "open_approved" | "changes_requested" | "open_failing" | "open_pending" | "open_conflicting" | "merged" | "no_pr" | null;
@@ -90,73 +91,25 @@ function stripPrPrefix(name: string): string {
     return base;
 }
 
-async function getPrStatus(projectPath: string): Promise<{ status: PrStatus; url?: string } | undefined> {
+async function resolveBulkInput(rootPath: string): Promise<BulkFetchInput | null> {
     let branch: string;
     try {
-        branch = (await execAsync("git rev-parse --abbrev-ref HEAD", { cwd: projectPath, timeout: 5000 })).stdout.trim();
+        branch = (await execAsync("git rev-parse --abbrev-ref HEAD", { cwd: rootPath, timeout: 5000 })).stdout.trim();
     } catch {
-        // Not a git repo / git command failed — treat as confirmed "no status"
-        return { status: null };
+        return null;
     }
-    if (branch === "HEAD" || branch === "master" || branch === "main" || branch === "develop") {
-        return { status: null };
+    if (!branch || branch === "HEAD" || branch === "master" || branch === "main" || branch === "develop") {
+        return null;
     }
+    let remote: string;
     try {
-
-        // Open PR with CI status
-        const openResult = await execAsync(
-            `gh pr list --state open --head "${branch}" --limit 1 --json number,url,statusCheckRollup,mergeable,reviewDecision`,
-            { cwd: projectPath, timeout: 10_000 }
-        );
-        const openData = JSON.parse(openResult.stdout);
-        if (openData.length > 0) {
-            const url = openData[ 0 ].url as string | undefined;
-            const reviewDecision = openData[ 0 ].reviewDecision as string | undefined;
-            // Conflicts block the merge regardless of CI; surface them first.
-            // UNKNOWN means GitHub hasn't finished computing mergeability yet — ignore.
-            if (openData[ 0 ].mergeable === "CONFLICTING") { return { status: "open_conflicting", url }; }
-            // A human explicitly requested changes — the strongest "do something" signal,
-            // shown ahead of CI state (the review block stands until re-approval).
-            if (reviewDecision === "CHANGES_REQUESTED") { return { status: "changes_requested", url }; }
-            const rawChecks = openData[ 0 ].statusCheckRollup || [];
-            if (rawChecks.length === 0) { return { status: "open_pending", url }; }
-            // gh returns every historical run of every check. Keep only the latest run
-            // per check name so re-runs supersede earlier failures (matches GitHub UI behaviour).
-            const latestByName = new Map<string, any>();
-            for (const c of rawChecks) {
-                const name = c.name || "";
-                const ts = Date.parse(c.completedAt || c.startedAt || "") || 0;
-                const existing = latestByName.get(name);
-                const existingTs = existing ? (Date.parse(existing.completedAt || existing.startedAt || "") || 0) : -1;
-                if (!existing || ts >= existingTs) { latestByName.set(name, c); }
-            }
-            const checks = Array.from(latestByName.values());
-            const statuses = new Set(checks.map((c: any) => c.status || ""));
-            const conclusions = new Set(checks.map((c: any) => c.conclusion || ""));
-            if (Array.from(statuses).some(s => s !== "COMPLETED")) { return { status: "open_pending", url }; }
-            if (conclusions.has("FAILURE") || conclusions.has("ERROR") || conclusions.has("TIMED_OUT")) { return { status: "open_failing", url }; }
-            // CI is green — distinguish human-approved (ready to merge) from awaiting review.
-            if (reviewDecision === "APPROVED") { return { status: "open_approved", url }; }
-            return { status: "open_passing", url };
-        }
-
-        // Recently merged
-        const mergedResult = await execAsync(
-            `gh pr list --state merged --head "${branch}" --limit 1 --json mergedAt,url`,
-            { cwd: projectPath, timeout: 10_000 }
-        );
-        const mergedData = JSON.parse(mergedResult.stdout);
-        if (mergedData.length > 0) {
-            const mergedAt = new Date(mergedData[ 0 ].mergedAt);
-            const ageDays = (Date.now() - mergedAt.getTime()) / (1000 * 60 * 60 * 24);
-            if (ageDays < MERGED_WINDOW_DAYS) { return { status: "merged", url: mergedData[ 0 ].url }; }
-        }
-
-        return { status: "no_pr" };
+        remote = (await execAsync("git remote get-url origin", { cwd: rootPath, timeout: 5000 })).stdout.trim();
     } catch {
-        // gh failed — return undefined so the caller keeps the previous cache entry
-        return undefined;
+        return null;
     }
+    const parsed = parseRepoFromRemote(remote);
+    if (!parsed) { return null; }
+    return { rootPath, branch, owner: parsed.owner, repo: parsed.repo };
 }
 
 async function captureClaudeState(projectPath: string): Promise<{ thinking: boolean; needsInput: boolean }> {
@@ -196,40 +149,58 @@ async function updateGitStatuses(projectStorage: ProjectStorage, providerManager
     const projects = (projectStorage as any).projects as Array<{ name: string; rootPath: string; enabled?: boolean }>;
     if (!projects || projects.length === 0) { return; }
 
-    // Fire each gh call independently and refresh only the affected project's tree node
-    projects.forEach(p => {
-        // Archived projects whose PR is already merged won't transition again — skip the gh call
-        // until they're unarchived. enabled=false marks archived; merged is terminal in practice.
-        if (p.enabled === false && statusCache.get(p.rootPath) === "merged") { return; }
-        getPrStatus(p.rootPath).then(result => {
-            if (!result) { return; } // gh failed — keep previous cache entry
-            const newStatus = result.status;
-            const newUrl = result.url;
-            const oldStatus = statusCache.get(p.rootPath) ?? null;
-            const oldUrl = prUrlCache.get(p.rootPath);
-            let changed = false;
-            if (newStatus !== oldStatus) {
-                statusCache.set(p.rootPath, newStatus);
-                changed = true;
-                if (newStatus === "merged" && oldStatus !== "merged") {
-                    reactToMergedPr(p.rootPath).catch(() => { /* logged inside */ });
-                }
-            }
-            if (newUrl !== oldUrl) {
-                if (newUrl) {
-                    prUrlCache.set(p.rootPath, newUrl);
-                } else {
-                    prUrlCache.delete(p.rootPath);
-                }
-                changed = true;
-            }
-            if (changed) {
-                persistCachesToGlobalState();
-                statusChangeEmitter.fire();
-                refreshAfterStatusChange(providerManager, p.rootPath);
-            }
-        }).catch(() => { /* swallow */ });
+    // Resolve (branch, owner, repo) per project in parallel from local git, skipping
+    // archived-already-merged rows (terminal state) and default-branch/main checkouts.
+    const eligible = projects.filter(p => !(p.enabled === false && statusCache.get(p.rootPath) === "merged"));
+    const resolved = await Promise.all(eligible.map(p => resolveBulkInput(p.rootPath)));
+
+    const inputs: BulkFetchInput[] = [];
+    const skippedRootPaths: string[] = [];
+    resolved.forEach((r, i) => {
+        if (r) { inputs.push(r); }
+        else { skippedRootPaths.push(eligible[ i ].rootPath); }
     });
+
+    // Projects on main/master/develop or non-git become null status — collapse to that without an API call.
+    for (const rootPath of skippedRootPaths) {
+        applyStatusUpdate(rootPath, { status: null }, providerManager);
+    }
+
+    if (inputs.length === 0) { return; }
+    const results = await bulkFetchPrStatuses(inputs);
+    if (!results) { return; } // auth / network failed — preserve cache
+
+    for (const [ rootPath, result ] of results) {
+        applyStatusUpdate(rootPath, result, providerManager);
+    }
+}
+
+function applyStatusUpdate(rootPath: string, result: { status: PrStatus; url?: string }, providerManager: Providers) {
+    const newStatus = result.status;
+    const newUrl = result.url;
+    const oldStatus = statusCache.get(rootPath) ?? null;
+    const oldUrl = prUrlCache.get(rootPath);
+    let changed = false;
+    if (newStatus !== oldStatus) {
+        statusCache.set(rootPath, newStatus);
+        changed = true;
+        if (newStatus === "merged" && oldStatus !== "merged") {
+            reactToMergedPr(rootPath).catch(() => { /* logged inside */ });
+        }
+    }
+    if (newUrl !== oldUrl) {
+        if (newUrl) {
+            prUrlCache.set(rootPath, newUrl);
+        } else {
+            prUrlCache.delete(rootPath);
+        }
+        changed = true;
+    }
+    if (changed) {
+        persistCachesToGlobalState();
+        statusChangeEmitter.fire();
+        refreshAfterStatusChange(providerManager, rootPath);
+    }
 }
 
 async function updateClaudeStatuses(projectStorage: ProjectStorage, providerManager: Providers) {
