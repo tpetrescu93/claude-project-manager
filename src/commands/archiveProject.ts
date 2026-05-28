@@ -23,11 +23,13 @@ function isProjectOpenInCurrentWindow(projectPath: string): boolean {
     return folders.some(f => f.uri.fsPath === projectPath);
 }
 
-async function killTmuxSession(sessionName: string): Promise<void> {
+async function killTmuxSession(sessionName: string): Promise<boolean> {
     try {
         await execAsync(`tmux kill-session -t "${sessionName}" 2>/dev/null`);
+        return true;
     } catch {
         // Session doesn't exist — that's fine
+        return false;
     }
 }
 
@@ -92,6 +94,28 @@ async function deleteArchivedProject(node: ArchivedProjectNode, projectStorage: 
     window.showInformationMessage(l10n.t("Project \"{0}\" deleted.", projectName));
 }
 
+async function killArchivedTmux(node: ArchivedProjectNode) {
+    const name = node.label as string;
+    const killed = await killTmuxSession(sessionNameFor(node.preview.path));
+    window.showInformationMessage(killed
+        ? l10n.t("Tmux session for \"{0}\" killed.", name)
+        : l10n.t("No tmux session for \"{0}\" was running.", name));
+}
+
+async function killAllArchivedTmux(projectStorage: ProjectStorage) {
+    const disabled = projectStorage.disabled() || [];
+    if (disabled.length === 0) { return; }
+
+    let killedCount = 0;
+    for (const project of disabled) {
+        if (await killTmuxSession(sessionNameFor(project.rootPath))) { killedCount++; }
+    }
+
+    window.showInformationMessage(killedCount === 0
+        ? l10n.t("No tmux sessions were running for archived projects.")
+        : l10n.t("Killed {0} tmux session(s) for archived projects.", killedCount));
+}
+
 async function deleteAllArchived(projectStorage: ProjectStorage, providerManager: Providers) {
     const disabled = projectStorage.disabled() || [];
     if (disabled.length === 0) { return; }
@@ -135,5 +159,9 @@ export function registerArchiveCommands(projectStorage: ProjectStorage, provider
             (node: ArchivedProjectNode) => deleteArchivedProject(node, projectStorage, providerManager)),
         commands.registerCommand("_projectManager.deleteAllArchived",
             () => deleteAllArchived(projectStorage, providerManager)),
+        commands.registerCommand("_projectManager.killArchivedTmux",
+            (node: ArchivedProjectNode) => killArchivedTmux(node)),
+        commands.registerCommand("_projectManager.killAllArchivedTmux",
+            () => killAllArchivedTmux(projectStorage)),
     );
 }

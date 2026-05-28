@@ -397,6 +397,16 @@
 				"command": "_projectManager.deleteAllArchived",
 				"title": "%projectManager.commands.deleteAllArchived.title%",
 				"icon": "$(trash)"
+			},
+			{
+				"command": "_projectManager.killArchivedTmux",
+				"title": "%projectManager.commands.killArchivedTmux.title%",
+				"icon": "$(circle-slash)"
+			},
+			{
+				"command": "_projectManager.killAllArchivedTmux",
+				"title": "%projectManager.commands.killAllArchivedTmux.title%",
+				"icon": "$(circle-slash)"
 			}
 		],
 		"menus": {
@@ -471,6 +481,14 @@
 				},
 				{
 					"command": "_projectManager.deleteAllArchived",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.killArchivedTmux",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.killAllArchivedTmux",
 					"when": "false"
 				},
 				{
@@ -592,9 +610,14 @@
 			],
 			"view/title": [
 				{
+					"command": "_projectManager.killAllArchivedTmux",
+					"when": "view == projectsExplorerArchived",
+					"group": "navigation@1"
+				},
+				{
 					"command": "_projectManager.deleteAllArchived",
 					"when": "view == projectsExplorerArchived",
-					"group": "navigation"
+					"group": "navigation@2"
 				},
 				{
 					"command": "_projectManager.showPinnedGitOnly",
@@ -799,9 +822,19 @@
 					"group": "inline@1"
 				},
 				{
-					"command": "_projectManager.deleteArchivedProject",
+					"command": "_projectManager.killArchivedTmux",
 					"when": "view == projectsExplorerArchived && viewItem == ArchivedProjectNodeKind",
 					"group": "inline@2"
+				},
+				{
+					"command": "_projectManager.deleteArchivedProject",
+					"when": "view == projectsExplorerArchived && viewItem == ArchivedProjectNodeKind",
+					"group": "inline@3"
+				},
+				{
+					"command": "_projectManager.killArchivedTmux",
+					"when": "view == projectsExplorerArchived && viewItem == ArchivedProjectNodeKind",
+					"group": "archive"
 				},
 				{
 					"command": "_projectManager.restoreProject",
