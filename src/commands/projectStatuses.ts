@@ -193,11 +193,14 @@ function cleanLegacyPrefixes(projectStorage: ProjectStorage): boolean {
 }
 
 async function updateGitStatuses(projectStorage: ProjectStorage, providerManager: Providers) {
-    const projects = (projectStorage as any).projects as Array<{ name: string; rootPath: string }>;
+    const projects = (projectStorage as any).projects as Array<{ name: string; rootPath: string; enabled?: boolean }>;
     if (!projects || projects.length === 0) { return; }
 
     // Fire each gh call independently and refresh only the affected project's tree node
     projects.forEach(p => {
+        // Archived projects whose PR is already merged won't transition again — skip the gh call
+        // until they're unarchived. enabled=false marks archived; merged is terminal in practice.
+        if (p.enabled === false && statusCache.get(p.rootPath) === "merged") { return; }
         getPrStatus(p.rootPath).then(result => {
             if (!result) { return; } // gh failed — keep previous cache entry
             const newStatus = result.status;
