@@ -36,7 +36,7 @@
     "projectManager.commands.open.title": "Open",
     "projectManager.commands.openInNewWindow.title": "Open in New Window",
     "projectManager.commands.openPR.title": "Open PR",
-    "projectManager.commands.openClaudeSession.title": "Open Claude Session",
+    "projectManager.commands.openTmuxSession.title": "Open Tmux Session",
     "projectManager.commands.pin.title": "Pin",
     "projectManager.commands.unpin.title": "Unpin",
     "projectManager.commands.showPinnedGitOnly.title": "Show Pinned Only",

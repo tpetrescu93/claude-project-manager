@@ -42,7 +42,7 @@ import { Project } from "./core/project";
 
 let locators: Locators;
 
-const CLAUDE_TERMINAL_PREFIX = "Claude: ";
+const TMUX_TERMINAL_PREFIX = "Tmux: ";
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -96,7 +96,7 @@ export async function activate(context: vscode.ExtensionContext) {
         }
         // Dispose the Claude terminal(s) before switching so VS Code saves a clean state
         vscode.window.terminals.forEach(t => {
-            if (t.name.startsWith(CLAUDE_TERMINAL_PREFIX)) {
+            if (t.name.startsWith(TMUX_TERMINAL_PREFIX)) {
                 t.dispose();
             }
         });
@@ -122,14 +122,20 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage(l10n.t("No open PR for this project."));
         }
     });
-    vscode.commands.registerCommand("_projectManager.openClaudeSession", (node) => {
+    vscode.commands.registerCommand("_projectManager.openTmuxSession", (node) => {
         const rootPath: string = node?.preview?.path ?? node?.command?.arguments?.[0];
         const projectName: string = node?.preview?.name ?? path.basename(rootPath);
+        // Inline what `gmux` does: derive tmux session name from the project's
+        // basename (dots → dashes — tmux session names can't contain dots),
+        // attach if a session already exists, otherwise create a fresh one.
+        // Avoids depending on the user's .bash_profile having a gmux function.
+        const sessionName = path.basename(rootPath).replace(/\./g, "-");
+        const cmd = `tmux attach -t "${sessionName}" 2>/dev/null || tmux new -s "${sessionName}"`;
         const terminal = vscode.window.createTerminal({
-            name: CLAUDE_TERMINAL_PREFIX + projectName,
+            name: TMUX_TERMINAL_PREFIX + projectName,
             cwd: rootPath,
             shellPath: "/bin/bash",
-            shellArgs: [ "-lic", "gmux" ]
+            shellArgs: [ "-c", cmd ]
         });
         terminal.show();
     });
@@ -213,11 +219,11 @@ export async function activate(context: vscode.ExtensionContext) {
     // Auto-launch Claude session if the workspace is a registered PM project and no Claude terminal exists
     const folder = vscode.workspace.workspaceFolders?.[0];
     if (folder) {
-        const expectedName = CLAUDE_TERMINAL_PREFIX + folder.name;
+        const expectedName = TMUX_TERMINAL_PREFIX + folder.name;
         const existing = vscode.window.terminals.find(t => t.name === expectedName);
         const isPmProject = projectStorage.existsWithRootPath(folder.uri.fsPath);
         if (!existing && isPmProject) {
-            vscode.commands.executeCommand("_projectManager.openClaudeSession", {
+            vscode.commands.executeCommand("_projectManager.openTmuxSession", {
                 preview: { name: folder.name, path: folder.uri.fsPath }
             });
         }

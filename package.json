@@ -283,8 +283,8 @@
 				"icon": "$(comment-discussion)"
 			},
 			{
-				"command": "_projectManager.openClaudeSession",
-				"title": "%projectManager.commands.openClaudeSession.title%"
+				"command": "_projectManager.openTmuxSession",
+				"title": "%projectManager.commands.openTmuxSession.title%"
 			},
 			{
 				"command": "_projectManager.pin",
@@ -428,7 +428,7 @@
 					"when": "false"
 				},
 				{
-					"command": "_projectManager.openClaudeSession",
+					"command": "_projectManager.openTmuxSession",
 					"when": "false"
 				},
 				{
@@ -802,7 +802,7 @@
 					"group": "navigation@2"
 				},
 				{
-					"command": "_projectManager.openClaudeSession",
+					"command": "_projectManager.openTmuxSession",
 					"when": "view =~ /projectsExplorer(Favorites|Git)/ && viewItem =~ /^ProjectNodeKind/",
 					"group": "favorites"
 				},
