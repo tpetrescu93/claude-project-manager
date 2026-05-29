@@ -27,6 +27,24 @@ const statusCache = new Map<string, PrStatus>();
 const prUrlCache = new Map<string, string>();
 const claudeThinkingCache = new Map<string, boolean>();
 const claudeNeedsInputCache = new Map<string, boolean>();
+const lastPaneContentCache = new Map<string, string>();
+
+/**
+ * Returns the pane content above the live input prompt `❯ `. Strips the
+ * input line itself plus everything below it (separator, wall-clock line,
+ * status bar, footer) so that:
+ *   - typing in the prompt doesn't count as "Claude thinking"
+ *   - the clock ticking every minute doesn't trigger a false positive
+ */
+function paneContentAboveInput(out: string): string {
+    const lines = out.split("\n");
+    for (let i = lines.length - 1; i >= 0; i--) {
+        if (lines[ i ].trimStart().startsWith("❯")) {
+            return lines.slice(0, i).join("\n");
+        }
+    }
+    return out;
+}
 const statusChangeEmitter = new EventEmitter<void>();
 export const onStatusChange = statusChangeEmitter.event;
 
@@ -120,11 +138,29 @@ async function captureClaudeState(projectPath: string): Promise<{ thinking: bool
             { timeout: 5000 }
         );
         const out = result.stdout;
-        return {
-            thinking: /\b(Computing|Forging|Ionizing|Manifesting|Thinking)…/.test(out),
-            needsInput: out.includes("Enter to select · ↑/↓ to navigate · Esc to cancel"),
-        };
+
+        // Thinking = output above the input prompt changed since last poll.
+        // When the spinner is active, the leading glyph cycles every ~100ms,
+        // the elapsed-time counter ticks every second, and any content streaming
+        // changes the buffer — all reliable signals of "Claude is doing work".
+        // When idle, the content area is static (spinner gone) → no diff.
+        const content = paneContentAboveInput(out);
+        const prev = lastPaneContentCache.get(projectPath);
+        lastPaneContentCache.set(projectPath, content);
+        const thinking = prev !== undefined && prev !== content;
+
+        // Picker footer detection. When a picker is active the selected option
+        // is prefixed with `❯`, so paneContentAboveInput would strip the actual
+        // picker footer (below the selection). Use the raw last 15 lines instead;
+        // the picker footer always sits at the very bottom when active.
+        const rawBottom = out.split("\n").slice(-15).join("\n");
+        const needsInput = rawBottom.includes("Enter to select · ↑/↓ to navigate · Esc to cancel");
+
+        return { thinking, needsInput };
     } catch {
+        // No tmux session — drop any stored content so we don't compare across
+        // a session restart.
+        lastPaneContentCache.delete(projectPath);
         return { thinking: false, needsInput: false };
     }
 }
