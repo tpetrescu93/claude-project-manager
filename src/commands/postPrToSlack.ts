@@ -9,6 +9,7 @@ import { Container } from "../core/container";
 import { ProjectNode } from "../sidebar/nodes";
 import { getPrUrlForPath } from "./projectStatuses";
 import { setSlackPost } from "./slackPostStore";
+import { snapshotSessionFiles, cleanupNewSessions } from "./claudeSessions";
 
 const SLACK_POST_MARKER = /^SLACK_POST:\s*(https?:\/\/\S+)/m;
 
@@ -21,6 +22,10 @@ function log(): OutputChannel {
 interface RunResult { ok: boolean; code: number | null; stdout: string; stderr: string; }
 
 function runClaude(rootPath: string, prompt: string): Promise<RunResult> {
+    // Snapshot existing sessions so we can delete the throwaway transcript this
+    // headless run creates — otherwise it becomes the project's "newest" session
+    // and Fork/resume would pick it up instead of the real working session.
+    const before = snapshotSessionFiles(rootPath);
     return new Promise((resolve) => {
         const child = spawn(
             "claude",
@@ -31,8 +36,8 @@ function runClaude(rootPath: string, prompt: string): Promise<RunResult> {
         let stderr = "";
         child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
         child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
-        child.on("error", (err) => resolve({ ok: false, code: null, stdout, stderr: stderr + err.message }));
-        child.on("close", (code) => resolve({ ok: code === 0, code, stdout, stderr }));
+        child.on("error", (err) => { cleanupNewSessions(rootPath, before); resolve({ ok: false, code: null, stdout, stderr: stderr + err.message }); });
+        child.on("close", (code) => { cleanupNewSessions(rootPath, before); resolve({ ok: code === 0, code, stdout, stderr }); });
     });
 }
 

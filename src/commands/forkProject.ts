@@ -27,7 +27,25 @@ function encodeProjectDir(rootPath: string): string {
  * Returns the newest session id (jsonl filename without extension) for a project,
  * or undefined if the project has no Claude session on disk.
  */
-function latestSessionId(rootPath: string): string | undefined {
+/**
+ * Heuristic: is this jsonl one of our headless automation sessions (pr-slack /
+ * merge-react)? Those are normally cleaned up after running, but an already-polluted
+ * dir or an interrupted run can leave one behind — and it must never be the session
+ * we fork/resume. Checks the head of the file for the known automation prompt.
+ */
+function isAutomationSession(file: string): boolean {
+    try {
+        const fd = fs.openSync(file, "r");
+        const buf = Buffer.allocUnsafe(4096);
+        const n = fs.readSync(fd, buf, 0, 4096, 0);
+        fs.closeSync(fd);
+        return /\bpr-slack(-react)? skill\b/.test(buf.toString("utf8", 0, n));
+    } catch {
+        return false;
+    }
+}
+
+export function latestSessionId(rootPath: string): string | undefined {
     const dir = path.join(CLAUDE_PROJECTS_DIR, encodeProjectDir(rootPath));
     let entries: string[];
     try {
@@ -35,16 +53,16 @@ function latestSessionId(rootPath: string): string | undefined {
     } catch {
         return undefined;
     }
-    let best: { id: string; mtimeMs: number } | undefined;
-    for (const f of entries) {
-        try {
-            const stat = fs.statSync(path.join(dir, f));
-            if (!best || stat.mtimeMs > best.mtimeMs) {
-                best = { id: f.replace(/\.jsonl$/, ""), mtimeMs: stat.mtimeMs };
-            }
-        } catch { /* skip */ }
+    // Newest first, skipping our own automation transcripts.
+    const sorted = entries
+        .map(f => { try { return { f, mtimeMs: fs.statSync(path.join(dir, f)).mtimeMs }; } catch { return undefined; } })
+        .filter((x): x is { f: string; mtimeMs: number } => !!x)
+        .sort((a, b) => b.mtimeMs - a.mtimeMs);
+    for (const { f } of sorted) {
+        if (isAutomationSession(path.join(dir, f))) { continue; }
+        return f.replace(/\.jsonl$/, "");
     }
-    return best?.id;
+    return undefined;
 }
 
 /**
@@ -54,7 +72,7 @@ function latestSessionId(rootPath: string): string | undefined {
  * the source. Mirrors the `move` skill's jq-based cwd rewrite. Returns false if
  * the source transcript couldn't be found.
  */
-async function copySessionWithCwdRewrite(sourcePath: string, targetPath: string, sessionId: string): Promise<boolean> {
+export async function copySessionWithCwdRewrite(sourcePath: string, targetPath: string, sessionId: string): Promise<boolean> {
     const srcDir = path.join(CLAUDE_PROJECTS_DIR, encodeProjectDir(sourcePath));
     const dstDir = path.join(CLAUDE_PROJECTS_DIR, encodeProjectDir(targetPath));
     const srcJsonl = path.join(srcDir, `${sessionId}.jsonl`);
