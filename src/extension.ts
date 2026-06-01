@@ -136,7 +136,9 @@ export async function activate(context: vscode.ExtensionContext) {
         // basename (dots → dashes — tmux session names can't contain dots),
         // attach if a session already exists, otherwise create a fresh one.
         const sessionName = path.basename(rootPath).replace(/\./g, "-");
-        const cmd = `tmux attach -t "${sessionName}" 2>/dev/null || tmux new -s "${sessionName}"`;
+        // `=` forces exact-match: tmux -t otherwise prefix-matches, so a project whose
+        // name is a prefix of another (e.g. foo vs foo-pt2) would attach to the wrong session.
+        const cmd = `tmux attach -t "=${sessionName}" 2>/dev/null || tmux new -s "${sessionName}"`;
         const terminal = vscode.window.createTerminal({
             name: expectedName,
             cwd: rootPath,

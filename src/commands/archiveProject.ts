@@ -25,7 +25,9 @@ function isProjectOpenInCurrentWindow(projectPath: string): boolean {
 
 async function killTmuxSession(sessionName: string): Promise<boolean> {
     try {
-        await execAsync(`tmux kill-session -t "${sessionName}" 2>/dev/null`);
+        // `=` forces exact-match (tmux -t prefix-matches otherwise — would kill a
+        // differently-named session whose name this one is a prefix of).
+        await execAsync(`tmux kill-session -t "=${sessionName}" 2>/dev/null`);
         return true;
     } catch {
         // Session doesn't exist — that's fine

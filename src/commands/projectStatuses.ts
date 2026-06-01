@@ -134,7 +134,11 @@ async function captureClaudeState(projectPath: string): Promise<{ thinking: bool
     try {
         const sessionName = path.basename(projectPath).replace(/\./g, "-");
         const result = await execAsync(
-            `tmux capture-pane -t "${sessionName}" -p -S -20`,
+            // `=name:` forces exact-match on the session (its active pane). Plain `-t name`
+            // prefix-matches, so a project whose name prefixes another's would scrape the
+            // wrong session; bare `=name` is rejected (capture-pane targets a pane, not a
+            // session), so the trailing `:` (session's active window/pane) is required.
+            `tmux capture-pane -t "=${sessionName}:" -p -S -20`,
             { timeout: 5000 }
         );
         const out = result.stdout;
