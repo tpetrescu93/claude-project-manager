@@ -167,6 +167,19 @@ Right-click a project that has a Claude session → "Fork Project + Claude Sessi
 
 Resolved the spec's open questions: `--resume` keys by session ID (`-r, --resume [value]` = "Resume a conversation by session ID"); the encoded dir is `rootPath.replace(/\//g, "-")` (leading dash kept); the fork *copies* (independent divergence, not shared); only `cwd` is rewritten (embedded paths in message history are left as historical record). `performClone` was factored out of `cloneProject.ts` for reuse.
 
+### Investigations — ✅ DONE
+Lightweight scratch sessions for agent work that doesn't (yet) need a git checkout — "why is this failing in prod?", "explain this subsystem", "draft a query". A `$(add)` "New Investigation" button on the Projects view title prompts for a name and creates one near-instantly.
+
+Design decisions that landed (some reversing the original sketch below):
+- **Storage**: investigations are **normal `projects.json` entries**, flagged `kind: "investigation"` (optional field on the `Project` model). No separate store. The flag rides through `storage.ts` load/`map`/`getProjectsByTag(s)`, and `StorageProvider.buildNode()` branches on it to emit an `InvestigationNode` (magnifying-glass `$(search)` icon) instead of a `ProjectNode`. Earlier this used a dedicated `globalState` store (`investigationStore.ts`) and a separate sidebar section — both removed. Investigations now live **in the same Projects list**, not a section of their own.
+- **Folder**: an **empty scratch dir** created in `~/projects/<slug>` (slugified name, `Date.now()`-suffixed on collision). No git, no rsync, no install — just `mkdir`. Created empty on purpose; not a pointer at an existing repo.
+- **No auto-start**: creation only registers the investigation. tmux/Claude is started on demand via "Open Tmux Session" (the same `_projectManager.openTmuxSession` flow as a normal project).
+- **Opens like any project**: clicking does the same hard workspace switch (`_projectManager.open`); the row highlights as the current project (via `resourceUri` + the `projectManager-view` decoration) and gets the same Claude thinking/needs-input status icons (the status poll picks investigations up automatically now that they're in `projects.json`; they're skipped only in the git/PR status fetch, having no branch).
+- **Promote** (`$(rocket)`): turns a scratch investigation into real work. Picks a **pinned Git repo** (the filtered Git section), runs the **clone flow** (`performClone`) into a fresh `~/projects/<name>` folder, **carries the Claude session across** (`copySessionWithCwdRewrite` — same transcript-copy + `cwd`-rewrite as Fork), resumes it in a detached tmux session, then tears down the scratch investigation (kill tmux, `rm -rf` folder, pop the entry). A new cwd is created and the session is moved into it — the scratch folder is **not** reused (it has no git; promote's whole point is to land the session inside a real clone).
+- **Delete** (`$(trash)`): kills the tmux session (exact `=name` match) and removes both the folder and the `projects.json` entry, with a modal confirm.
+
+Inline buttons on an investigation row: `$(terminal)` Open Tmux, `$(rocket)` Promote, `$(trash)` Delete. Context menu mirrors them.
+
 ### Archive / restore / delete workflow — ✅ DONE
 Right-click → Archive moves an entry to a hidden "Archived" tree under Projects. Archive also kills the project's tmux session inline (`tmux kill-session -t "<name>" 2>/dev/null`, name = `basename(rootPath).replace(/\./g, "-")`). Archived rows have:
 - Click-to-switch: opens the project, same as Favorites and Git.
@@ -281,16 +294,6 @@ Replace `vscode.openFolder(uri, …)` with `vscode.workspace.updateWorkspaceFold
 - Extensions that only read `workspace.workspaceFolders` at activation (don't subscribe to `onDidChangeWorkspaceFolders`) will show stale state until manual reload. ~10–20% of extensions historically. Cmd+R is the escape hatch.
 
 **Scope:** ~10–30 lines in `_projectManager.open`, plus terminal cleanup policy.
-
-### Lightweight investigation sessions
-A separate sidebar section for **ephemeral Claude sessions that aren't tied to a git clone**. The idea: a lot of agent work is investigation/Q&A ("why is this failing in prod?", "explain this subsystem", "draft a query") that doesn't need a writable checkout, a branch, or CI. Spinning up a full Clone-to-New-Project (rsync + bun install, ~10–15s) for that is overkill.
-
-An investigation session would be:
-- **Cheap to spawn** — just a directory (maybe a temp dir, or a read-only pointer at an existing repo) + a tmux session + Claude. No rsync, no install, near-instant.
-- **Listed in its own sidebar section** ("Investigations" or similar), visually distinct from Favorites/Git. No PR/CI status column (no branch → nothing to poll), just the Claude thinking/needs-input indicator.
-- **Promotable** — if an investigation turns into real work, a "Promote to Project" action converts it into a full git-backed project (do the clone/branch then, carrying the session's Claude context across — pairs with the session-split idea above).
-
-Open questions: whether it needs *any* filesystem backing or can run against an existing repo read-only; where the cwd lives (temp dir vs shared); how Claude's transcript/project-dir keying behaves for a throwaway cwd; and lifecycle (auto-clean on close, or persist until dismissed).
 
 ### Gate thinking detection on Claude being the foreground process
 The diff-based thinking detection (see Claude session status) only knows "this tmux pane's content changed" — it has no concept of whether Claude is actually running. So a long-running *non-Claude* command in that session (`npm test`, `tail -f`, etc.), or typing at a bash prompt that doesn't use the `❯` character, can falsely light up the thinking swirl. Could gate on the foreground process via `tmux display-message -p '#{pane_current_command}'` (check for `claude`/`node`) before treating a diff as "Claude thinking". Deferred — in practice each tmux session here is dedicated to Claude, so false positives are rare.
