@@ -1,4 +1,4 @@
-# Project Manager Fork — Feature Spec
+# Project Manager Fork
 
 Fork of [alefragnani/vscode-project-manager](https://github.com/alefragnani/vscode-project-manager) (v13.1.0). This document is a living record of what's been added on top of upstream and what remains as potential future work.
 
