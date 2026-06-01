@@ -61,9 +61,9 @@ Pending CI uses `ThemeIcon('sync~spin', charts.yellow)` — VS Code's native spi
 - **Tmux pane scraping** (what we ship). Reflects the actual rendered UI, so any state change — including Ctrl+C in any phase — implicitly clears the spinner from the visible pane. The trade-off is ~450 lightweight tmux forks per minute at N=15 projects. After trying several regex variants (hardcoded 5 verbs, generalised `…(\d+s` with optional footer/shell patterns) and hitting brittleness or scrollback false positives, we settled on a **content-diff** approach: capture the area above the live `❯` prompt, compare to previous tick, flag thinking when it changed. The diff is intrinsically TUI-agnostic (catches multi-step plans, new spinner glyphs, future Claude UI changes) and has none of the regex-tuning churn. Picker-footer detection is still a literal string match because a stuck picker is static (no diff) — but scoped to the last 15 lines so source-code-in-scrollback doesn't trigger it.
 
 ### Remote PR / CI / merge state — ✅ DONE
-**Implementation:** in-process polling every 60s. One `gh pr list` per favorite, parallelised per-project with targeted tree refresh (or full re-sort when sort=Status).
+**Implementation:** in-process polling every 6s via a single bulk GraphQL query (see cadence note below). Targeted per-project tree refresh on change, or full re-sort when sort=Status.
 
-**Data:** one bulk GraphQL query per cycle (replacing N parallel `gh` shell-outs).
+**Data:** one bulk GraphQL query per cycle (replacing the original N parallel `gh pr list` shell-outs).
 
 The cycle resolves `(branch, owner, repo)` per project locally (`git rev-parse` + `git remote get-url`), groups projects by repo, and issues a single POST to `api.github.com/graphql` with aliased sub-queries:
 
@@ -106,9 +106,9 @@ Response handling per PR: prefer an OPEN PR (then map to conflicting / changes_r
 **Review detection:** `reviewDecision` is GitHub's computed decision and respects CODEOWNERS / branch-protection (not "one approval = approved"). It's `null` on repos with no required reviews, so `open_approved` only appears on protected repos.
 
 **Important quirks handled:**
-- `statusCheckRollup` returns every historical run of every check. Deduped by `name` keeping latest `completedAt` so re-runs supersede earlier failures (matches GitHub UI behaviour).
-- `mergeable === "UNKNOWN"` (GitHub still computing) is ignored — doesn't override CI — to avoid flicker right after a push.
-- `gh` transient failures (network, timeout) return `undefined` rather than `{status: null}` so the cached status doesn't get wiped to "no_pr" momentarily.
+- We query `statusCheckRollup.state` (GitHub's precomputed overall rollup), so the historical-run dedup we needed against the old REST `gh pr list --json statusCheckRollup` is no longer necessary — GitHub returns the deduped state directly.
+- Only `mergeable === "CONFLICTING"` short-circuits to the conflict state; any other value (`MERGEABLE`, or `UNKNOWN` while GitHub is still computing) falls through to the CI checks, so a freshly-pushed PR doesn't flicker.
+- Network / auth failures return `undefined` rather than `{status: null}` so the cached status isn't wiped to "no_pr" momentarily; a 401 also drops the cached `gh auth token` so it's re-fetched next cycle.
 
 **Persistence:** status + URL cache stored in `globalState`, restored on activation so icons render immediately without waiting for the first poll.
 
@@ -119,7 +119,7 @@ Response handling per PR: prefer an OPEN PR (then map to conflicting / changes_r
 - **Real subscriptions (webhooks)**: GitHub does support push delivery via webhooks (often paired with smee.io for local relay), but webhooks require repo-admin or org-admin permissions to configure. For wagestream repos that's not achievable for a personal extension, so polling is the only practical option.
 - **REST polling with a shorter interval**: capped by the 5000 req/hr REST limit. At N=15 projects each cycle makes ~1 REST request, so the minimum safe interval is ~11s — and even at that rate the `gh` process-spawn cost (~100ms × N parallel) makes the loop heavy.
 - **GraphQL with `statusCheckRollup.contexts(first:100)`**: returns ~50–100 nodes per PR, ~1000 nodes/query for 15 projects, ~10 points/query. At 6s that's 6000 pts/hr — over the GraphQL limit. So we deliberately fetch only `statusCheckRollup.state` and let GitHub's pre-computed rollup do the dedup.
-- **Event triggers (filesystem watcher on `.git/refs/heads/<branch>`, `window.onDidChangeWindowState`)**: complementary to polling — they'd cut perceived latency on local pushes and tab re-focus to <1s. Not yet wired up; listed in Potential future features.
+- **Event triggers (filesystem watcher on `.git/refs/heads/<branch>`, `window.onDidChangeWindowState`)**: would cut perceived latency on local pushes and tab re-focus to <1s. Considered and dropped — once polling dropped to 6s the marginal benefit didn't justify the extra moving parts.
 - **`gh pr checks --watch`**: gh has a "watch" mode but it's polling under the hood at a few-seconds cadence; running one per project means N persistent gh processes. Discarded.
 
 ### Sort by Status — ✅ DONE
@@ -177,7 +177,7 @@ Title-bar toggle "Show pinned only" filters the Git view to pinned repos only. T
 Pinned Git entries also appear in the drag-reorder flow and the Sort-by-Status ordering.
 
 ### Rename project — ✅ inherited from upstream
-The existing rename command only changes the display name in `projects.json`; the rootPath is untouched. Extending rename to also `fs.rename` the underlying folder is potential future work (see below).
+The existing rename command only changes the display name in `projects.json`; the rootPath is untouched. Extending it to also `fs.rename` the underlying folder was considered and rejected: renaming a folder out from under a live tmux+Claude session orphans the tmux session (name is frozen at creation), breaks thinking detection, degrades the running process's cwd (`$PWD` goes stale, `getcwd` can fail on macOS), and desyncs Claude's transcript dir (`~/.claude/projects/<encoded-cwd>/`). Not worth the failure modes.
 
 ### Post PR to Slack + auto-react on merge — ✅ DONE
 Inline Slack icon on each Favorites row. Click → confirmation modal with PR URL → spawns headless `claude -p --dangerously-skip-permissions` with the user's `pr-slack` skill. The skill posts a single-link Slack message (`<url|title>`, with `unfurl_links: false`) to a fixed channel, then prints `SLACK_POST: <permalink>` on its final line.
@@ -254,14 +254,6 @@ Sources: [Terminal Advanced (VS Code docs)](https://code.visualstudio.com/docs/t
 
 ## Potential future features
 
-### Event-driven PR status triggers
-Polling at 6s catches changes within ~3s on average, but two moments could feel sub-second with cheap event hooks:
-
-- **Local push**: `FileSystemWatcher` on each project's `.git/refs/heads/<current-branch>`. When the file's mtime changes (you pushed or amended), fire an immediate re-poll for that project.
-- **Window focus regained**: `window.onDidChangeWindowState` → trigger a full bulk poll. Coming back from Slack/browser shows fresh state immediately rather than after the next tick.
-
-Both are ~60 lines combined, no rate-limit risk (they piggyback the existing bulk query), and would make "I just pushed and want to see CI start" feel instant.
-
 ### Soft workspace switch
 Replace `vscode.openFolder(uri, …)` with `vscode.workspace.updateWorkspaceFolders(0, current.length, { uri: newUri })`. This mutates the workspace folder list in place — no window reload, no extension host restart.
 
@@ -278,21 +270,6 @@ Replace `vscode.openFolder(uri, …)` with `vscode.workspace.updateWorkspaceFold
 
 **Scope:** ~10–30 lines in `_projectManager.open`, plus terminal cleanup policy.
 
-### Rename project + underlying folder
-Today's rename only updates the display name in `projects.json`. Extending to also `fs.rename(oldPath, newPath)` is a small change, but the failure modes are real:
-- Project currently open in any window → workspace path breaks mid-flight.
-- External state doesn't follow: tmux session names, bash aliases, git worktrees, symlinks, IDE caches.
-- Destination folder may already exist.
-- Probably wants to be a separate command ("Rename Project & Folder") rather than overloading the existing one.
-
-### Broader Claude state detection
-Current regex catches `Computing|Forging|Ionizing|Manifesting|Thinking` spinner verbs. Doesn't catch:
-- `Crunched for Ns` / `Cooked` — post-turn rest markers.
-- `N monitor still running` / `N shells` — background tools alive.
-- Queued user prompts pending submit.
-
-A richer state machine could distinguish "Claude actively thinking" vs "Claude session alive but resting". Question is whether the user cares about the latter as a distinct visual state.
-
 ### Custom project description
 `projects.json` has no user-facing description field. Adding one (with fallback to the auto-populated parent-dir path) is ~50 lines: schema field + tree item read + context-menu command + showInputBox. Deferred — `description` slot is already populated with the parent path, which is the most useful signal.
 
@@ -302,8 +279,16 @@ Branch name, dirty count, ahead/behind. Would use `git status --porcelain=v1 -b`
 ### Two-line rendering
 Project name on line 1, status detail on line 2. Not possible in TreeView (fixed row height, single label/description slot). Workaround via nested children is ugly (disclosure triangles, broken keyboard nav). Would require switching to a WebviewView, which means rebuilding keyboard nav, context menus, drag/drop, and accessibility from scratch.
 
+### Slack — remove the skill dependency, post natively
+Today posting to Slack and reacting on merge both shell out to `claude -p` to invoke the `pr-slack` / `pr-slack-react` skills, which use Claude's MCP Slack auth. This means the extension depends on (a) `claude` being on PATH, (b) the user having those two skills installed at `~/.claude/skills/`, and (c) Claude's MCP Slack integration being authenticated — none of which are reasonable to assume for anyone but the author. Each post is also a 5–15s LLM round-trip.
+
+Replace with a native Slack integration in the extension:
+- **Auth**: OAuth flow (or a bot/user token entered once into `SecretStorage`) — the extension owns the credential, no MCP dependency. A VS Code `UriHandler` catches the OAuth redirect.
+- **Post / react**: call Slack's Web API (`chat.postMessage`, `reactions.add`, `chat.getPermalink`) directly over HTTPS from an embedded script. Instant, no `claude` process, no skill files.
+- Removes the cross-machine fragility (skills live outside the repo and aren't versioned with it) and makes the feature shippable to other users.
+
 ### Slack — multi-channel support
-Today the `pr-slack` skill hardcodes a single channel ID. Could be extended to read channel from per-project config in `globalState` (or a JSON map in extension settings). Trade-off: extra UI to manage the mapping vs simplicity of one channel.
+Today the channel ID is hardcoded. Could be extended to read channel from per-project config in `globalState` (or a JSON map in extension settings). Trade-off: extra UI to manage the mapping vs simplicity of one channel. (Pairs naturally with the native-Slack work above.)
 
 ---
 
