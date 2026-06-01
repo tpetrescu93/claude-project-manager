@@ -295,6 +295,9 @@ Open questions: whether it needs *any* filesystem backing or can run against an 
 ### Gate thinking detection on Claude being the foreground process
 The diff-based thinking detection (see Claude session status) only knows "this tmux pane's content changed" — it has no concept of whether Claude is actually running. So a long-running *non-Claude* command in that session (`npm test`, `tail -f`, etc.), or typing at a bash prompt that doesn't use the `❯` character, can falsely light up the thinking swirl. Could gate on the foreground process via `tmux display-message -p '#{pane_current_command}'` (check for `claude`/`node`) before treating a diff as "Claude thinking". Deferred — in practice each tmux session here is dedicated to Claude, so false positives are rare.
 
+### Persist Claude thinking/needs-input across workspace switches
+The thinking/needs-input caches are in-memory only (unlike PR status, which persists to globalState). On a workspace switch the icons blank until the next 2s tmux poll repopulates them — a visible flicker. Tried persisting the caches to globalState and restoring on activation (like PR status); it did **not** eliminate the flicker (the tree renders before/around the restore, and the 2s poll re-fires regardless), so it was reverted. A real fix likely needs the restore to happen synchronously before the first tree render, or to suppress the first post-switch poll-driven refresh when the cached value is unchanged. Deferred — needs more investigation into the activation/render ordering.
+
 ### Custom project description
 `projects.json` has no user-facing description field. Adding one (with fallback to the auto-populated parent-dir path) is ~50 lines: schema field + tree item read + context-menu command + showInputBox. Deferred — `description` slot is already populated with the parent path, which is the most useful signal.
 
