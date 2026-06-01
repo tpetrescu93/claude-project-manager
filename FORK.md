@@ -270,6 +270,29 @@ Replace `vscode.openFolder(uri, …)` with `vscode.workspace.updateWorkspaceFold
 
 **Scope:** ~10–30 lines in `_projectManager.open`, plus terminal cleanup policy.
 
+### Lightweight investigation sessions
+A separate sidebar section for **ephemeral Claude sessions that aren't tied to a git clone**. The idea: a lot of agent work is investigation/Q&A ("why is this failing in prod?", "explain this subsystem", "draft a query") that doesn't need a writable checkout, a branch, or CI. Spinning up a full Clone-to-New-Project (rsync + bun install, ~10–15s) for that is overkill.
+
+An investigation session would be:
+- **Cheap to spawn** — just a directory (maybe a temp dir, or a read-only pointer at an existing repo) + a tmux session + Claude. No rsync, no install, near-instant.
+- **Listed in its own sidebar section** ("Investigations" or similar), visually distinct from Favorites/Git. No PR/CI status column (no branch → nothing to poll), just the Claude thinking/needs-input indicator.
+- **Promotable** — if an investigation turns into real work, a "Promote to Project" action converts it into a full git-backed project (do the clone/branch then, carrying the session's Claude context across — pairs with the session-split idea above).
+
+Open questions: whether it needs *any* filesystem backing or can run against an existing repo read-only; where the cwd lives (temp dir vs shared); how Claude's transcript/project-dir keying behaves for a throwaway cwd; and lifecycle (auto-clean on close, or persist until dismissed).
+
+### Split a Claude session into a new project
+Take a project with an active Claude session and spin off a *new* project (new folder + branch, via the existing Clone-to-New-Project flow) that starts with the **same Claude memory/context** as the source — so you can fork a line of work and have the new agent pick up where the old one left off, then diverge.
+
+Rough mechanism:
+- Clone the project as today (rsync + new branch + register in `projects.json`).
+- Copy the source session's transcript from `~/.claude/projects/<encoded-source-cwd>/<session>.jsonl` into the new project's project dir (`~/.claude/projects/<encoded-new-cwd>/`), since Claude keys its session store by cwd-encoded path.
+- Launch Claude in the new tmux session resuming that transcript (`claude --resume <session-id>`, or whatever the current fork/resume entry point is) so it boots with the carried-over history.
+
+Open questions to verify before building: exactly how `--resume` keys to the cwd vs the session id; whether a fork should *copy* the transcript (independent divergence — likely what's wanted) or *share* it (both sessions writing the same file — bad); and whether any absolute paths baked into the transcript need rewriting to the new folder. The "kill before rename" lesson from the rejected folder-rename feature applies here too — don't mutate a transcript a live session is appending to.
+
+### Gate thinking detection on Claude being the foreground process
+The diff-based thinking detection (see Claude session status) only knows "this tmux pane's content changed" — it has no concept of whether Claude is actually running. So a long-running *non-Claude* command in that session (`npm test`, `tail -f`, etc.), or typing at a bash prompt that doesn't use the `❯` character, can falsely light up the thinking swirl. Could gate on the foreground process via `tmux display-message -p '#{pane_current_command}'` (check for `claude`/`node`) before treating a diff as "Claude thinking". Deferred — in practice each tmux session here is dedicated to Claude, so false positives are rare.
+
 ### Custom project description
 `projects.json` has no user-facing description field. Adding one (with fallback to the auto-populated parent-dir path) is ~50 lines: schema field + tree item read + context-menu command + showInputBox. Deferred — `description` slot is already populated with the parent path, which is the most useful signal.
 
