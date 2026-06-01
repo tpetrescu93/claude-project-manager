@@ -173,6 +173,39 @@ export class ArchivedProjectNode extends TreeItem {
     }
 }
 
+export class InvestigationNode extends TreeItem {
+
+    // An investigation is a normal projects.json entry (kind: "investigation").
+    // It renders with the magnifying-glass stamp (or the Claude thinking/needs-input
+    // status when active) and opens like any project.
+    constructor(
+        public readonly label: string,
+        public readonly rootPath: string,
+        public readonly profile: string = "",
+    ) {
+        super(label, TreeItemCollapsibleState.None);
+        this.contextValue = "InvestigationNodeKind";
+        // resourceUri (projectManager-view scheme) drives the current-project
+        // highlight decoration when this investigation is the active workspace.
+        this.resourceUri = Uri.from({ scheme: "projectManager-view", path: rootPath });
+        if (isClaudeWaitingForInputForPath(rootPath)) {
+            this.iconPath = {
+                light: Uri.joinPath(Container.context.extensionUri, "images/ico-status-needsinput-light.svg"),
+                dark: Uri.joinPath(Container.context.extensionUri, "images/ico-status-needsinput-dark.svg")
+            };
+        } else if (isClaudeThinkingForPath(rootPath)) {
+            this.iconPath = Uri.joinPath(Container.context.extensionUri, "images/ico-status-thinking-swirl.svg");
+        } else {
+            this.iconPath = new ThemeIcon("search");
+        }
+        this.command = {
+            command: "_projectManager.open",
+            title: "",
+            arguments: [ rootPath, label, profile ]
+        };
+    }
+}
+
 export class TagNode extends TreeItem {
 
     constructor(

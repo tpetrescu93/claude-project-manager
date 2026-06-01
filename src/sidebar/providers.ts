@@ -6,7 +6,7 @@
 import * as vscode from "vscode";
 import { Locators } from "../autodetect/locators";
 import { ProjectStorage } from "../storage/storage";
-import { ProjectNode, TagNode } from "./nodes";
+import { ProjectNode, TagNode, InvestigationNode } from "./nodes";
 import { AutodetectProvider, deduplicateByRemote } from "./autodetectProvider";
 import { ArchivedProvider } from "./archivedProvider";
 import { StorageProvider } from "./storageProvider";
@@ -23,7 +23,7 @@ export class Providers {
     public svnProvider: AutodetectProvider;
     public anyProvider: AutodetectProvider;
 
-    private storageTreeView: vscode.TreeView<ProjectNode | TagNode>;
+    private storageTreeView: vscode.TreeView<ProjectNode | TagNode | InvestigationNode>;
     private archivedTreeView: vscode.TreeView<any>;
     private vscodeTreeView: vscode.TreeView<ProjectNode>;
     private gitTreeView: vscode.TreeView<ProjectNode>;
@@ -91,7 +91,7 @@ export class Providers {
         );
     }
 
-    private async handleStorageTreeViewExpansionChange(event: vscode.TreeViewExpansionEvent<ProjectNode | TagNode>, state: "expanded" | "collapsed") {
+    private async handleStorageTreeViewExpansionChange(event: vscode.TreeViewExpansionEvent<ProjectNode | TagNode | InvestigationNode>, state: "expanded" | "collapsed") {
         const element = event.element;
         if (element instanceof TagNode) {
             const behavior = vscode.workspace.getConfiguration("projectManager").get<string>("tags.collapseItems", "startExpanded");
@@ -132,6 +132,11 @@ export class Providers {
 
     public refreshStorageProjectNode(rootPath: string) {
         this.storageProvider.refreshProjectNode(rootPath);
+    }
+
+    public refreshInvestigations() {
+        // Investigations render inside the Projects (storage) view now.
+        this.storageProvider.refresh();
     }
 
     public updateTreeViewStorage() {

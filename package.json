@@ -385,6 +385,26 @@
 				"icon": "$(git-branch)"
 			},
 			{
+				"command": "_projectManager.newInvestigation",
+				"title": "%projectManager.commands.newInvestigation.title%",
+				"icon": "$(add)"
+			},
+			{
+				"command": "_projectManager.openInvestigationTmux",
+				"title": "%projectManager.commands.openInvestigationTmux.title%",
+				"icon": "$(terminal)"
+			},
+			{
+				"command": "_projectManager.promoteInvestigation",
+				"title": "%projectManager.commands.promoteInvestigation.title%",
+				"icon": "$(rocket)"
+			},
+			{
+				"command": "_projectManager.deleteInvestigation",
+				"title": "%projectManager.commands.deleteInvestigation.title%",
+				"icon": "$(trash)"
+			},
+			{
 				"command": "_projectManager.archiveProject",
 				"title": "%projectManager.commands.archiveProject.title%"
 			},
@@ -474,6 +494,22 @@
 				},
 				{
 					"command": "_projectManager.forkProject",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.newInvestigation",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.openInvestigationTmux",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.promoteInvestigation",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.deleteInvestigation",
 					"when": "false"
 				},
 				{
@@ -619,6 +655,11 @@
 			],
 			"view/title": [
 				{
+					"command": "_projectManager.newInvestigation",
+					"when": "view == projectsExplorerFavorites",
+					"group": "navigation"
+				},
+				{
 					"command": "_projectManager.killAllArchivedTmux",
 					"when": "view == projectsExplorerArchived",
 					"group": "navigation@1"
@@ -760,6 +801,36 @@
 				}
 			],
 			"view/item/context": [
+				{
+					"command": "_projectManager.openInvestigationTmux",
+					"when": "view == projectsExplorerFavorites && viewItem == InvestigationNodeKind",
+					"group": "inline@1"
+				},
+				{
+					"command": "_projectManager.promoteInvestigation",
+					"when": "view == projectsExplorerFavorites && viewItem == InvestigationNodeKind",
+					"group": "inline@2"
+				},
+				{
+					"command": "_projectManager.deleteInvestigation",
+					"when": "view == projectsExplorerFavorites && viewItem == InvestigationNodeKind",
+					"group": "inline@3"
+				},
+				{
+					"command": "_projectManager.openInvestigationTmux",
+					"when": "view == projectsExplorerFavorites && viewItem == InvestigationNodeKind",
+					"group": "investigation"
+				},
+				{
+					"command": "_projectManager.promoteInvestigation",
+					"when": "view == projectsExplorerFavorites && viewItem == InvestigationNodeKind",
+					"group": "investigation"
+				},
+				{
+					"command": "_projectManager.deleteInvestigation",
+					"when": "view == projectsExplorerFavorites && viewItem == InvestigationNodeKind",
+					"group": "investigation"
+				},
 				{
 					"command": "_projectManager.postPrToSlack",
 					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",

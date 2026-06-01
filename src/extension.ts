@@ -29,6 +29,7 @@ import { ViewFavoritesAs } from "./sidebar/constants";
 import { registerSortBy, updateSortByContext } from "./commands/sortBy";
 import { registerCloneProject } from "./commands/cloneProject";
 import { registerForkProject } from "./commands/forkProject";
+import { registerInvestigations } from "./commands/investigations";
 import { registerArchiveCommands } from "./commands/archiveProject";
 import { getPrUrlForPath, registerProjectStatuses } from "./commands/projectStatuses";
 import { registerPostPrToSlack } from "./commands/postPrToSlack";
@@ -66,6 +67,7 @@ export async function activate(context: vscode.ExtensionContext) {
     registerSupportProjectManager();
     registerCloneProject(projectStorage);
     registerForkProject(projectStorage);
+    registerInvestigations(projectStorage, providerManager);
     registerArchiveCommands(projectStorage, providerManager);
     registerPostPrToSlack();
     registerSortBy();

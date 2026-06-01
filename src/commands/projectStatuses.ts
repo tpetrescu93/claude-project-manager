@@ -191,12 +191,15 @@ function cleanLegacyPrefixes(projectStorage: ProjectStorage): boolean {
 }
 
 async function updateGitStatuses(projectStorage: ProjectStorage, providerManager: Providers) {
-    const projects = (projectStorage as any).projects as Array<{ name: string; rootPath: string; enabled?: boolean }>;
+    const projects = (projectStorage as any).projects as Array<{ name: string; rootPath: string; enabled?: boolean; kind?: string }>;
     if (!projects || projects.length === 0) { return; }
 
     // Resolve (branch, owner, repo) per project in parallel from local git, skipping
-    // archived-already-merged rows (terminal state) and default-branch/main checkouts.
-    const eligible = projects.filter(p => !(p.enabled === false && statusCache.get(p.rootPath) === "merged"));
+    // archived-already-merged rows (terminal state), default-branch/main checkouts, and
+    // investigations (scratch dirs with no git repo).
+    const eligible = projects.filter(p =>
+        p.kind !== "investigation"
+        && !(p.enabled === false && statusCache.get(p.rootPath) === "merged"));
     const resolved = await Promise.all(eligible.map(p => resolveBulkInput(p.rootPath)));
 
     const inputs: BulkFetchInput[] = [];
@@ -256,7 +259,9 @@ function applyStatusUpdate(rootPath: string, result: { status: PrStatus; url?: s
 }
 
 async function updateClaudeStatuses(projectStorage: ProjectStorage, providerManager: Providers) {
-    const projects = (projectStorage as any).projects as Array<{ name: string; rootPath: string }>;
+    // Investigations are normal projects.json entries now, so they're already in
+    // this list — no special-casing needed.
+    const projects = (projectStorage as any).projects as Array<{ name: string; rootPath: string }> | undefined;
     if (!projects || projects.length === 0) { return; }
 
     projects.forEach(p => {

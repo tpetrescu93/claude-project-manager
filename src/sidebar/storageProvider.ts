@@ -11,28 +11,29 @@ import { PathUtils } from "../utils/path";
 import { isRemotePath } from "../utils/remote";
 import { sortProjects } from "../utils/sorter";
 import { NO_TAGS_DEFINED } from "./constants";
-import { NoTagNode, ProjectNode, TagNode } from "./nodes";
+import { NoTagNode, ProjectNode, TagNode, InvestigationNode } from "./nodes";
 
 interface ProjectInQuickPick {
     label: string;
     description: string;
     profile: string;
+    kind?: string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
 interface ProjectInQuickPickList extends Array<ProjectInQuickPick> { }
 
-export class StorageProvider implements vscode.TreeDataProvider<ProjectNode | TagNode>, vscode.TreeDragAndDropController<ProjectNode | TagNode> {
+export class StorageProvider implements vscode.TreeDataProvider<ProjectNode | TagNode | InvestigationNode>, vscode.TreeDragAndDropController<ProjectNode | TagNode | InvestigationNode> {
 
     private static readonly DRAG_MIME_TYPE = "application/vnd.code.tree.projectsExplorerFavorites";
 
     public readonly dropMimeTypes: readonly string[] = [ StorageProvider.DRAG_MIME_TYPE ];
     public readonly dragMimeTypes: readonly string[] = [ StorageProvider.DRAG_MIME_TYPE ];
 
-    public readonly onDidChangeTreeData: vscode.Event<ProjectNode | TagNode | void>;
+    public readonly onDidChangeTreeData: vscode.Event<ProjectNode | TagNode | InvestigationNode | void>;
 
     private projectSource: ProjectStorage;
-    private internalOnDidChangeTreeData: vscode.EventEmitter<ProjectNode | TagNode | void> = new vscode.EventEmitter<ProjectNode | TagNode | void>();
+    private internalOnDidChangeTreeData: vscode.EventEmitter<ProjectNode | TagNode | InvestigationNode | void> = new vscode.EventEmitter<ProjectNode | TagNode | InvestigationNode | void>();
     private nodesByPath = new Map<string, ProjectNode>();
     private static readonly TAGS_EXPANSION_STATE_KEY = "projectsExplorerFavorites.tagsExpansionState";
 
@@ -108,17 +109,17 @@ export class StorageProvider implements vscode.TreeDataProvider<ProjectNode | Ta
         this.refresh();
     }
 
-    public getTreeItem(element: ProjectNode | TagNode): vscode.TreeItem {
+    public getTreeItem(element: ProjectNode | TagNode | InvestigationNode): vscode.TreeItem {
         return element;
     }
 
-    public getChildren(element?: ProjectNode | TagNode): Thenable<(ProjectNode | TagNode)[]> {
+    public getChildren(element?: ProjectNode | TagNode): Thenable<(ProjectNode | TagNode | InvestigationNode)[]> {
 
         return new Promise(resolve => {
 
             if (element) {
 
-                const nodes: ProjectNode[] = [];
+                const nodes: (ProjectNode | InvestigationNode)[] = [];
 
                 let projectsMapped = <ProjectInQuickPickList>this.projectSource.getProjectsByTag(element.label);
 
@@ -129,33 +130,14 @@ export class StorageProvider implements vscode.TreeDataProvider<ProjectNode | Ta
                 projectsMapped = sortProjects(projectsMapped);
 
                 for (let index = 0; index < projectsMapped.length; index++) {
-                    const prj: ProjectInQuickPick = projectsMapped[ index ];
-
-                    let iconFavorites = "favorites";
-                    if (path.extname(prj.description) === ".code-workspace") {
-                        iconFavorites = "favorites-workspace";
-                    } else if (isRemotePath(prj.description)) {
-                        iconFavorites = "favorites-remote";
-                    }
-                    const expandedPath = PathUtils.expandHomePath(prj.description);
-                    const node = new ProjectNode(prj.label, vscode.TreeItemCollapsibleState.None,
-                        iconFavorites, {
-                            name: prj.label,
-                            path: expandedPath
-                        }, {
-                            command: "_projectManager.open",
-                            title: "",
-                            arguments: [ expandedPath, prj.label, prj.profile ],
-                        });
-                    this.nodesByPath.set(expandedPath, node);
-                    nodes.push(node);
+                    nodes.push(this.buildNode(projectsMapped[ index ]));
                 }
 
                 resolve(nodes);
 
             } else { // ROOT
 
-                // no project saved yet, returns [] `empty`...
+                // no project saved yet
                 if (this.projectSource.length() === 0) {
                     return resolve([]);
                 }
@@ -193,7 +175,7 @@ export class StorageProvider implements vscode.TreeDataProvider<ProjectNode | Ta
 
                 // viewAsList OR no Tags
                 // raw list
-                const nodes: ProjectNode[] = [];
+                const nodes: (ProjectNode | InvestigationNode)[] = [];
 
                 let projectsMapped: ProjectInQuickPickList;
 
@@ -207,32 +189,38 @@ export class StorageProvider implements vscode.TreeDataProvider<ProjectNode | Ta
                 projectsMapped = sortProjects(projectsMapped);
 
                 for (let index = 0; index < projectsMapped.length; index++) {
-                    const prj: ProjectInQuickPick = projectsMapped[ index ];
-
-                    let iconFavorites = "favorites";
-                    if (path.extname(prj.description) === ".code-workspace") {
-                        iconFavorites = "favorites-workspace";
-                    } else if (isRemotePath(prj.description)) {
-                        iconFavorites = "favorites-remote";
-                    }
-                    const expandedPath = PathUtils.expandHomePath(prj.description);
-                    const node = new ProjectNode(prj.label, vscode.TreeItemCollapsibleState.None,
-                        iconFavorites, {
-                            name: prj.label,
-                            path: expandedPath
-                        },
-                        {
-                            command: "_projectManager.open",
-                            title: "",
-                            arguments: [ expandedPath, prj.label, prj.profile ],
-                        });
-                    this.nodesByPath.set(expandedPath, node);
-                    nodes.push(node);
+                    nodes.push(this.buildNode(projectsMapped[ index ]));
                 }
 
                 resolve(nodes);
             }
         });
+    }
+
+    /** Build the right node for a project entry — investigation (magnifying glass)
+     *  vs normal project — based on its `kind`. */
+    private buildNode(prj: ProjectInQuickPick): ProjectNode | InvestigationNode {
+        const expandedPath = PathUtils.expandHomePath(prj.description);
+        if (prj.kind === "investigation") {
+            return new InvestigationNode(prj.label, expandedPath, prj.profile);
+        }
+        let iconFavorites = "favorites";
+        if (path.extname(prj.description) === ".code-workspace") {
+            iconFavorites = "favorites-workspace";
+        } else if (isRemotePath(prj.description)) {
+            iconFavorites = "favorites-remote";
+        }
+        const node = new ProjectNode(prj.label, vscode.TreeItemCollapsibleState.None,
+            iconFavorites, {
+                name: prj.label,
+                path: expandedPath
+            }, {
+                command: "_projectManager.open",
+                title: "",
+                arguments: [ expandedPath, prj.label, prj.profile ],
+            });
+        this.nodesByPath.set(expandedPath, node);
+        return node;
     }
 
 }
