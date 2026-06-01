@@ -153,8 +153,12 @@ async function captureClaudeState(projectPath: string): Promise<{ thinking: bool
         // is prefixed with `❯`, so paneContentAboveInput would strip the actual
         // picker footer (below the selection). Use the raw last 15 lines instead;
         // the picker footer always sits at the very bottom when active.
+        // Match the stable ends of the footer ("Enter to select" … "Esc to cancel")
+        // so it catches every picker variant — single-select uses "↑/↓ to navigate",
+        // the AskUserQuestion multi-picker uses "Tab/Arrow keys to navigate", etc.
+        // Single-line match (no newline in `.`) keeps it anchored to one footer line.
         const rawBottom = out.split("\n").slice(-15).join("\n");
-        const needsInput = rawBottom.includes("Enter to select · ↑/↓ to navigate · Esc to cancel");
+        const needsInput = /Enter to select.*Esc to cancel/.test(rawBottom);
 
         return { thinking, needsInput };
     } catch {
