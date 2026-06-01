@@ -157,6 +157,16 @@ Right-click a project → "Clone to New Project". Input box for branch name. Imp
 
 Total runtime ~10–15s typical for a paydays-api clone.
 
+### Fork Project + Claude Session — ✅ DONE
+Right-click a project that has a Claude session → "Fork Project + Claude Session...". Clones it to a new folder/branch (reusing the clone flow) AND carries the Claude conversation across so a new agent resumes where the old one left off, then diverges.
+
+- **Name prompt** is prefilled with the source project's name, pre-selected for editing; the edited value becomes both the new folder name and the git branch (matches the folder≈branch convention). Blocks if left identical to the source.
+- **Session copy**: finds the source's newest transcript in `~/.claude/projects/<encoded-source-cwd>/`, copies it (and the subagent dir, recursively, best-effort, skipping non-regular files like IPC sockets) into `~/.claude/projects/<encoded-new-cwd>/`, **rewriting every entry's `cwd`** to the new path via `jq` — same mechanism as the `move` skill. Without the rewrite, `--resume` stays pinned to the source folder.
+- **Resume**: starts `claude --resume <session-id>` in a **detached** tmux session (`tmux new-session -d … bash -lic 'claude --resume …'`). Detached on purpose — `window.createTerminal` would otherwise open a terminal tab in the *current* (unrelated) workspace. Switching to the fork and "Open Tmux Session" attaches to the already-running resumed session.
+- Toast offers an "Open Project" button to switch immediately, or you ignore it and keep working where you are.
+
+Resolved the spec's open questions: `--resume` keys by session ID (`-r, --resume [value]` = "Resume a conversation by session ID"); the encoded dir is `rootPath.replace(/\//g, "-")` (leading dash kept); the fork *copies* (independent divergence, not shared); only `cwd` is rewritten (embedded paths in message history are left as historical record). `performClone` was factored out of `cloneProject.ts` for reuse.
+
 ### Archive / restore / delete workflow — ✅ DONE
 Right-click → Archive moves an entry to a hidden "Archived" tree under Projects. Archive also kills the project's tmux session inline (`tmux kill-session -t "<name>" 2>/dev/null`, name = `basename(rootPath).replace(/\./g, "-")`). Archived rows have:
 - Click-to-switch: opens the project, same as Favorites and Git.
@@ -281,16 +291,6 @@ An investigation session would be:
 - **Promotable** — if an investigation turns into real work, a "Promote to Project" action converts it into a full git-backed project (do the clone/branch then, carrying the session's Claude context across — pairs with the session-split idea above).
 
 Open questions: whether it needs *any* filesystem backing or can run against an existing repo read-only; where the cwd lives (temp dir vs shared); how Claude's transcript/project-dir keying behaves for a throwaway cwd; and lifecycle (auto-clean on close, or persist until dismissed).
-
-### Split a Claude session into a new project
-Take a project with an active Claude session and spin off a *new* project (new folder + branch, via the existing Clone-to-New-Project flow) that starts with the **same Claude memory/context** as the source — so you can fork a line of work and have the new agent pick up where the old one left off, then diverge.
-
-Rough mechanism:
-- Clone the project as today (rsync + new branch + register in `projects.json`).
-- Copy the source session's transcript from `~/.claude/projects/<encoded-source-cwd>/<session>.jsonl` into the new project's project dir (`~/.claude/projects/<encoded-new-cwd>/`), since Claude keys its session store by cwd-encoded path.
-- Launch Claude in the new tmux session resuming that transcript (`claude --resume <session-id>`, or whatever the current fork/resume entry point is) so it boots with the carried-over history.
-
-Open questions to verify before building: exactly how `--resume` keys to the cwd vs the session id; whether a fork should *copy* the transcript (independent divergence — likely what's wanted) or *share* it (both sessions writing the same file — bad); and whether any absolute paths baked into the transcript need rewriting to the new folder. The "kill before rename" lesson from the rejected folder-rename feature applies here too — don't mutate a transcript a live session is appending to.
 
 ### Gate thinking detection on Claude being the foreground process
 The diff-based thinking detection (see Claude session status) only knows "this tmux pane's content changed" — it has no concept of whether Claude is actually running. So a long-running *non-Claude* command in that session (`npm test`, `tail -f`, etc.), or typing at a bash prompt that doesn't use the `❯` character, can falsely light up the thinking swirl. Could gate on the foreground process via `tmux display-message -p '#{pane_current_command}'` (check for `claude`/`node`) before treating a diff as "Claude thinking". Deferred — in practice each tmux session here is dedicated to Claude, so false positives are rare.
