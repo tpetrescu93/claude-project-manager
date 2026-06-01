@@ -94,12 +94,6 @@ export async function activate(context: vscode.ExtensionContext) {
         if (!await canSwitchOnActiveWindow(CommandLocation.SideBar)) {
             return;
         }
-        // Dispose the Claude terminal(s) before switching so VS Code saves a clean state
-        vscode.window.terminals.forEach(t => {
-            if (t.name.startsWith(TMUX_TERMINAL_PREFIX)) {
-                t.dispose();
-            }
-        });
         vscode.commands.executeCommand("vscode.openFolder", uri, { forceProfile: profile , forceNewWindow: false } )
             .then(
                 () => ({}),  // done
@@ -122,22 +116,36 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage(l10n.t("No open PR for this project."));
         }
     });
-    vscode.commands.registerCommand("_projectManager.openTmuxSession", (node) => {
+    vscode.commands.registerCommand("_projectManager.openTmuxSession", async (node) => {
         const rootPath: string = node?.preview?.path ?? node?.command?.arguments?.[0];
         const projectName: string = node?.preview?.name ?? path.basename(rootPath);
+        const expectedName = TMUX_TERMINAL_PREFIX + projectName;
+
+        const existing = vscode.window.terminals.find(t => t.name === expectedName);
+        if (existing) {
+            // Already exists. .show() works for panel terminals but is unreliable
+            // for editor-area terminals; force focus via the workbench command too.
+            existing.show();
+            await vscode.commands.executeCommand("workbench.action.terminal.focus");
+            return;
+        }
+
         // Inline what `gmux` does: derive tmux session name from the project's
         // basename (dots → dashes — tmux session names can't contain dots),
         // attach if a session already exists, otherwise create a fresh one.
-        // Avoids depending on the user's .bash_profile having a gmux function.
         const sessionName = path.basename(rootPath).replace(/\./g, "-");
         const cmd = `tmux attach -t "${sessionName}" 2>/dev/null || tmux new -s "${sessionName}"`;
         const terminal = vscode.window.createTerminal({
-            name: TMUX_TERMINAL_PREFIX + projectName,
+            name: expectedName,
             cwd: rootPath,
             shellPath: "/bin/bash",
             shellArgs: [ "-c", cmd ]
         });
         terminal.show();
+        // Move out of the Terminal panel and into the editor area as its own tab.
+        // VS Code's command operates on the currently-focused terminal, which the
+        // show() above makes ours.
+        await vscode.commands.executeCommand("workbench.action.terminal.moveToEditor");
     });
 
     // register commands (here, because it needs to be used right below if an invalid JSON is present)
@@ -215,19 +223,6 @@ export async function activate(context: vscode.ExtensionContext) {
     loadProjectsFile();
     registerProjectStatuses(projectStorage, providerManager);
     initShowPinnedOnlyContext();
-
-    // Auto-launch Claude session if the workspace is a registered PM project and no Claude terminal exists
-    const folder = vscode.workspace.workspaceFolders?.[0];
-    if (folder) {
-        const expectedName = TMUX_TERMINAL_PREFIX + folder.name;
-        const existing = vscode.window.terminals.find(t => t.name === expectedName);
-        const isPmProject = projectStorage.existsWithRootPath(folder.uri.fsPath);
-        if (!existing && isPmProject) {
-            vscode.commands.executeCommand("_projectManager.openTmuxSession", {
-                preview: { name: folder.name, path: folder.uri.fsPath }
-            });
-        }
-    }
 
     // TODO: Extract the detection of the current project from `showStatusBar`, and optimize how it works.
     // Evaluate if it is really necessary to get the `Project` instance, or if just the root path is enough.
