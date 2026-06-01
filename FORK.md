@@ -184,11 +184,13 @@ Inline Slack icon on each Favorites row. Click → confirmation modal with PR UR
 
 The extension parses that marker and stores `{rootPath → permalink}` in `globalState["slackPostsByRootPath"]`.
 
-The 60s polling loop already detects `merged` transitions. When a project flips to `merged` AND has a stored permalink, the extension fires the `pr-slack-react` skill via another headless claude invocation, passing the permalink. The skill parses out `channel + ts`, calls `mcp__slack__add_reaction` with `name: merged_purple`, then the extension deletes the entry.
+The 6s polling loop already detects `merged` transitions. When a project flips to `merged` AND has a stored permalink, the extension fires the `pr-slack-react` skill via another headless claude invocation, passing the permalink. The skill parses out `channel + ts`, calls `mcp__slack__add_reaction` with `name: merged_purple`, then the extension deletes the entry on success.
 
 All claude invocations log full stdout/stderr to dedicated output channels (`Project Manager: Slack`, `Project Manager: Slack React`). Failure toasts have a "Show Logs" button.
 
 **Why this shape:** the extension never handles Slack auth. Auth lives in Claude's MCP setup, which the user already has. Trade-off: each post/react is a 5–15s Claude round-trip vs an instant API call. Acceptable for a few-times-a-day workflow.
+
+**Known limitation — the merge-react is not interrupt-safe.** `reactToMergedPr` spawns `claude -p` as a child of the extension host. Switching workspaces reloads the window, which restarts the extension host and kills/orphans that child mid-run — and since the react is a slow 5–15s round-trip that fires right when a PR merges (exactly when you tend to move to the next project), the interrupt window is wide. Worse, the react only fires on the `oldStatus !== "merged" → "merged"` *transition*; once interrupted the status is already cached `merged`, so the edge never recurs and the reaction is permanently missed (the stored permalink is left dangling because `deleteSlackPost` only runs on success). **Fix (not yet implemented):** make it self-healing — on activation / each poll, for any rootPath that still has a stored permalink AND is cached `merged`, re-fire the react. `reactions.add` is idempotent (`already_reacted` = success), so re-firing is safe even if an orphaned process already completed it. This turns "fire once, lose on interrupt" into eventually-consistent.
 
 ---
 
@@ -306,9 +308,24 @@ Project name on line 1, status detail on line 2. Not possible in TreeView (fixed
 Today posting to Slack and reacting on merge both shell out to `claude -p` to invoke the `pr-slack` / `pr-slack-react` skills, which use Claude's MCP Slack auth. This means the extension depends on (a) `claude` being on PATH, (b) the user having those two skills installed at `~/.claude/skills/`, and (c) Claude's MCP Slack integration being authenticated — none of which are reasonable to assume for anyone but the author. Each post is also a 5–15s LLM round-trip.
 
 Replace with a native Slack integration in the extension:
-- **Auth**: OAuth flow (or a bot/user token entered once into `SecretStorage`) — the extension owns the credential, no MCP dependency. A VS Code `UriHandler` catches the OAuth redirect.
-- **Post / react**: call Slack's Web API (`chat.postMessage`, `reactions.add`, `chat.getPermalink`) directly over HTTPS from an embedded script. Instant, no `claude` process, no skill files.
+- **Auth**: OAuth flow (or a bot/user token entered once into `SecretStorage`) — the extension owns the credential, no MCP dependency. A VS Code `UriHandler` catches the OAuth redirect. (Note the current MCP auth is *not* reusable: it's an OAuth session against a Wagestream corp gateway `mcp.ai.corp.stream.co`, with the token in the macOS Keychain under `Claude Code-credentials` — there's no Slack token to lift. Going native means either re-OAuthing against that gateway or standing up a separate Slack app/token, the latter possibly subject to Slack-admin policy.)
+- **Post / react**: call Slack's Web API (`chat.postMessage`, `reactions.add`, `chat.getPermalink`) directly over HTTPS from an embedded script. Sub-second, no `claude` process, no skill files.
 - Removes the cross-machine fragility (skills live outside the repo and aren't versioned with it) and makes the feature shippable to other users.
+
+**Benchmark justification (measured 2026-06-01).** Posting a Slack message by shelling out to `claude` is ~8–11s and there's no way to speed it up while keeping `claude` in the loop:
+
+| Path | Time | Notes |
+|------|------|-------|
+| Cold `claude -p`, Opus 4.8 | ~11.3s | avg of 2 |
+| Cold `claude -p`, Haiku | ~11.3s | avg of 2 — identical to Opus |
+| Hot (send-keys into a live, warm session) | ~7.7s | corroborated by claude's own "Sautéed for 7s" |
+
+Findings: (1) **model choice is irrelevant** — Opus and Haiku are identical, so the inference is a small slice and "use a faster model" buys nothing; (2) **a warm session saves only ~3.5s** (the CLI cold-start + MCP-connect cost), still leaving ~8s; (3) the **dominant, irreducible cost in both paths is the MCP tool round-trip to the remote corp gateway + inference** — present whether cold or hot. Only a native HTTPS call (no `claude`, no MCP protocol, no remote gateway hop unless we deliberately keep it) gets to sub-second. Also noted during benchmarking: `tmux send-keys "text" Enter` does **not** reliably submit to Claude's TUI (the text lands as multiline input and Enter inserts a newline) — you must send the text, pause, then send `Enter` as a separate keystroke, and even then it's flaky. A relevant wrinkle for the "session actions via send-keys" idea below.
+
+### Session actions — one-click commands injected into the live session
+A generic version of the Slack button: register a list of `{icon, label, keystrokes}` actions (in settings) that render as inline buttons on project rows and, on click, inject the keystrokes into that project's live tmux+Claude session (`tmux send-keys`). Turns any slash command or prompt (`/pr-slack`, `/rebase-and-monitor`, "commit and push") into a one-click row button, reusing the already-authenticated warm session — which sidesteps the whole Slack-auth problem for one-way "go do this" actions.
+
+Caveats (from the benchmark above and the detection work): submission via send-keys is flaky (text + *separate, delayed* Enter, and still occasionally sticks); it must be gated on Claude being the foreground process AND idle (else keystrokes land in bash or interleave with a running turn); and it's fire-and-forget — no result captured. So it fits one-way actions but NOT the merge-react (which needs the message `ts` back) — that stays on a mechanism that can capture output.
 
 ### Slack — multi-channel support
 Today the channel ID is hardcoded. Could be extended to read channel from per-project config in `globalState` (or a JSON map in extension settings). Trade-off: extra UI to manage the mapping vs simplicity of one channel. (Pairs naturally with the native-Slack work above.)
