@@ -349,6 +349,46 @@ The fork stays a fork.
 
 ---
 
+## Editing capability vs Conductor / Superset
+
+Neither Conductor nor Superset is a full editor — both expect you to open your real IDE for serious hand-editing (researched 2026-06-01):
+
+- **Conductor** has a light built-in file editor (syntax highlighting + ⌘F) and a diff/review viewer, but explicitly tells you to "open the workspace in your favorite IDE to make edits" and ships a VS Code extension for exactly that bounce-out.
+- **Superset** has its own chat / diff / file editor / in-app browser, but explicitly "integrates with VS Code, Cursor, Xcode, JetBrains… rather than being based on them" — i.e. it is **not** a Code-OSS fork; its editing surface is a lighter custom implementation.
+- Neither has VS Code's depth: no extension ecosystem, no full LSP/IntelliSense, no debugger, no refactoring tools, none of your accumulated config/keybindings.
+
+Because this fork lives *inside* VS Code, it gets 100% of VS Code's editing for free while adding the orchestration on top. Conductor/Superset force a context-switch (orchestrate in their app, edit in VS Code); this collapses it into one surface.
+
+Sources: [Conductor](https://www.conductor.build/), [Conductor diff/edit blog](https://www.conductor.build/blog/diff-tools), [Superset](https://superset.sh/), [superset-sh/superset](https://github.com/superset-sh/superset).
+
+---
+
+## VS Code native agents vs this extension
+
+VS Code shipped a native **Agents window / Agent Sessions** (in Stable as of 1.120, May 2026, still labelled **Preview**) that runs Claude (via Anthropic's official Agent harness), Codex, and Copilot as local / background / **cloud** agents, with a unified sidebar to delegate and compare outputs. It overlaps heavily with this extension and is the biggest "why does this exist" pressure. Researched 2026-06-01.
+
+| Dimension | VS Code native agents | This extension |
+|-----------|----------------------|----------------|
+| What runs | Claude via Anthropic's "Agent harness" integration (+ Codex, Copilot) | The real Claude Code **CLI** with your full setup — skills, MCP, `CLAUDE.md`, permission wrappers |
+| Execution | Local, background, **cloud** (remote infra) | Local tmux only |
+| Persistence | Local agents tied to VS Code lifecycle (docs don't claim restart-survival); cloud persists server-side | tmux survives VS Code restart / crash / folder-switch |
+| Parallelism | Subagents in parallel; background agents in isolated worktrees | One persistent session per project; switch between projects |
+| **Auth / cost** | **Requires a paid GitHub Copilot seat** (Claude needs Pro/Business, Codex needs Pro+). Free tier excludes third-party agents. **Cannot** BYO Anthropic account / Claude Code CLI auth — billing is exclusively through Copilot | Your existing Claude (Max/Team) subscription via the CLI; **zero Copilot dependency** |
+| Workflow extras | None PR/Slack-specific | PR/CI/review status column, post-to-Slack, react-on-merge |
+| Editing | Full VS Code (in-editor) | Full VS Code (in-editor) — tie |
+
+**Where VS Code native is genuinely better:** cloud/background delegation (fire a long task at remote infra, close the laptop); multiple agent *types* side by side (Claude + Codex + Copilot); official, cross-platform, no tmux/shell-scraping fragility.
+
+**Where this extension is genuinely better:** runs your *actual configured* Claude Code CLI (skills/MCP/CLAUDE.md/permissions), not a harness integration; sessions survive anything via tmux; uses your existing Claude subscription with **no Copilot seat required**; project-switcher model + PR/Slack lifecycle.
+
+**The decisive point for this setup:** VS Code's native agents are inaccessible without a paid Copilot subscription, and you can't route your own Claude plan through them — even the "Claude" agent bills through GitHub. So for someone who already pays for Claude, doesn't want a Copilot seat, and runs a heavily-customized Claude Code CLI, the native path isn't just different — it's unavailable. The tmux+CLI approach is the only way to get *your* Claude, in VS Code, on *your* subscription.
+
+Unverified caveat: whether VS Code's *local* agents survive a window reload/restart — docs are silent (usually means "no"). If they ever add tmux-grade local persistence, this extension's biggest differentiator shrinks (though the Copilot-dependency and own-CLI points stand regardless).
+
+Sources: [Use the Agents window (Preview)](https://code.visualstudio.com/docs/copilot/agents/agents-window), [Third-party agents in VS Code](https://code.visualstudio.com/docs/copilot/agents/third-party-agents), [VS Code 1.120 release notes](https://code.visualstudio.com/updates/v1_120), [Claude/Codex for Copilot Business & Pro (GitHub Changelog)](https://github.blog/changelog/2026-02-26-claude-and-codex-now-available-for-copilot-business-pro-users/), [VS Code multi-agent blog](https://code.visualstudio.com/blogs/2026/02/05/multi-agent-development).
+
+---
+
 ## Installation
 
 VS Code can't install extensions from a git URL. Options:
