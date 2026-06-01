@@ -78,10 +78,11 @@ function statusRank(path: string): number {
         case "open_failing": return 4;
         case "open_pending": return 5;
         case "open_approved": return 6;
-        case "open_passing": return 7;
-        case "merged": return 8;
-        case "no_pr": return 9;
-        default: return 10;
+        case "open_posted": return 7;
+        case "open_passing": return 8;
+        case "merged": return 9;
+        case "no_pr": return 10;
+        default: return 11;
     }
 }
 

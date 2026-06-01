@@ -12,6 +12,7 @@ import { ProjectStorage } from "../storage/storage";
 import { Providers } from "../sidebar/providers";
 import { reactToMergedPr } from "./reactToMergedPr";
 import { bulkFetchPrStatuses, BulkFetchInput, parseRepoFromRemote } from "./githubBulkFetch";
+import { getSlackPost } from "./slackPostStore";
 
 const execAsync = promisify(exec);
 
@@ -21,7 +22,7 @@ const MERGED_WINDOW_DAYS = 30;
 const GIT_INTERVAL_MS = 6_000;
 const CLAUDE_INTERVAL_MS = 2_000;
 
-export type PrStatus = "open_passing" | "open_approved" | "changes_requested" | "open_failing" | "open_pending" | "open_conflicting" | "merged" | "no_pr" | null;
+export type PrStatus = "open_passing" | "open_posted" | "open_approved" | "changes_requested" | "open_failing" | "open_pending" | "open_conflicting" | "merged" | "no_pr" | null;
 
 const statusCache = new Map<string, PrStatus>();
 const prUrlCache = new Map<string, string>();
@@ -220,7 +221,14 @@ async function updateGitStatuses(projectStorage: ProjectStorage, providerManager
 }
 
 function applyStatusUpdate(rootPath: string, result: { status: PrStatus; url?: string }, providerManager: Providers) {
-    const newStatus = result.status;
+    // "Posted to Slack" overlay: once a PR has been posted (a permalink is stored),
+    // show open_posted instead of the plain green "passing, awaiting review" state.
+    // Leaves actionable states (conflicting/changes_requested/failing/pending) and
+    // approved (ready to merge) intact — those matter more than "announced".
+    let newStatus = result.status;
+    if (newStatus === "open_passing" && getSlackPost(rootPath)) {
+        newStatus = "open_posted";
+    }
     const newUrl = result.url;
     const oldStatus = statusCache.get(rootPath) ?? null;
     const oldUrl = prUrlCache.get(rootPath);

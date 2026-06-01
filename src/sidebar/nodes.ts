@@ -78,6 +78,8 @@ export class ProjectNode extends TreeItem {
                 return new ThemeIcon("pass-filled", new ThemeColor("charts.green"));
             case "open_approved":
                 return new ThemeIcon("check-all", new ThemeColor("charts.green"));
+            case "open_posted":
+                return new ThemeIcon("comment-discussion", new ThemeColor("charts.blue"));
             case "changes_requested":
                 return new ThemeIcon("request-changes", new ThemeColor("charts.red"));
             case "open_failing":
