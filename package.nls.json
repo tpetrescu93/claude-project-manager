@@ -47,6 +47,7 @@
     "projectManager.commands.addToWorkspace#sideBar.title": "Add to Workspace",
     "projectManager.commands.addToWorkspace.title": "Project Manager: Add Project to Workspace",
     "projectManager.commands.cloneProject.title": "Clone to New Project...",
+    "projectManager.commands.forkProject.title": "Fork Project + Claude Session...",
     "projectManager.commands.archiveProject.title": "Archive",
     "projectManager.commands.restoreProject.title": "Restore",
     "projectManager.commands.deleteArchivedProject.title": "Delete",

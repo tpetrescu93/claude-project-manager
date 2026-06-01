@@ -380,6 +380,11 @@
 				"icon": "$(add)"
 			},
 			{
+				"command": "_projectManager.forkProject",
+				"title": "%projectManager.commands.forkProject.title%",
+				"icon": "$(git-branch)"
+			},
+			{
 				"command": "_projectManager.archiveProject",
 				"title": "%projectManager.commands.archiveProject.title%"
 			},
@@ -465,6 +470,10 @@
 				},
 				{
 					"command": "_projectManager.cloneProject",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.forkProject",
 					"when": "false"
 				},
 				{
@@ -808,6 +817,11 @@
 				},
 				{
 					"command": "_projectManager.cloneProject",
+					"when": "view =~ /projectsExplorer(Favorites|Git)/ && viewItem =~ /^ProjectNodeKind/",
+					"group": "favorites"
+				},
+				{
+					"command": "_projectManager.forkProject",
 					"when": "view =~ /projectsExplorer(Favorites|Git)/ && viewItem =~ /^ProjectNodeKind/",
 					"group": "favorites"
 				},

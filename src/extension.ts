@@ -28,6 +28,7 @@ import { pickTags } from "./quickpick/tagsPicker";
 import { ViewFavoritesAs } from "./sidebar/constants";
 import { registerSortBy, updateSortByContext } from "./commands/sortBy";
 import { registerCloneProject } from "./commands/cloneProject";
+import { registerForkProject } from "./commands/forkProject";
 import { registerArchiveCommands } from "./commands/archiveProject";
 import { getPrUrlForPath, registerProjectStatuses } from "./commands/projectStatuses";
 import { registerPostPrToSlack } from "./commands/postPrToSlack";
@@ -64,6 +65,7 @@ export async function activate(context: vscode.ExtensionContext) {
     registerOpenSettings();
     registerSupportProjectManager();
     registerCloneProject(projectStorage);
+    registerForkProject(projectStorage);
     registerArchiveCommands(projectStorage, providerManager);
     registerPostPrToSlack();
     registerSortBy();
