@@ -260,11 +260,15 @@ function applyStatusUpdate(rootPath: string, result: { status: PrStatus; url?: s
 
 async function updateClaudeStatuses(projectStorage: ProjectStorage, providerManager: Providers) {
     // Investigations are normal projects.json entries now, so they're already in
-    // this list — no special-casing needed.
-    const projects = (projectStorage as any).projects as Array<{ name: string; rootPath: string }> | undefined;
-    if (!projects || projects.length === 0) { return; }
+    // this list — no special-casing needed. Archived projects (enabled === false)
+    // are skipped: their tmux session is killed on archive, and the archived tree
+    // doesn't render Claude status anyway, so polling them is wasted subprocess
+    // spawns that only add contention to the live sessions' captures.
+    const projects = (projectStorage as any).projects as Array<{ name: string; rootPath: string; enabled?: boolean }> | undefined;
+    const active = projects?.filter(p => p.enabled !== false);
+    if (!active || active.length === 0) { return; }
 
-    projects.forEach(p => {
+    active.forEach(p => {
         captureClaudeState(p.rootPath).then(state => {
             const oldThinking = claudeThinkingCache.get(p.rootPath) ?? false;
             const oldNeedsInput = claudeNeedsInputCache.get(p.rootPath) ?? false;
