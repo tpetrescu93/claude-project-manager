@@ -12,6 +12,7 @@ import { isRemotePath } from "../utils/remote";
 import { sortProjects } from "../utils/sorter";
 import { NO_TAGS_DEFINED } from "./constants";
 import { NoTagNode, ProjectNode, TagNode, InvestigationNode } from "./nodes";
+import { buildProjectTooltip } from "../commands/projectTooltip";
 
 interface ProjectInQuickPick {
     label: string;
@@ -110,7 +111,21 @@ export class StorageProvider implements vscode.TreeDataProvider<ProjectNode | Ta
     }
 
     public getTreeItem(element: ProjectNode | TagNode | InvestigationNode): vscode.TreeItem {
+        // Clear the eager tooltip on project/investigation rows so VS Code calls
+        // resolveTreeItem() and we can build the rich tooltip lazily on hover.
+        if (element instanceof ProjectNode || element instanceof InvestigationNode) {
+            element.tooltip = undefined;
+        }
         return element;
+    }
+
+    public async resolveTreeItem(item: vscode.TreeItem, element: ProjectNode | TagNode | InvestigationNode, token: vscode.CancellationToken): Promise<vscode.TreeItem> {
+        if (element instanceof ProjectNode) {
+            item.tooltip = await buildProjectTooltip(element.preview.path, element.label, false);
+        } else if (element instanceof InvestigationNode) {
+            item.tooltip = await buildProjectTooltip(element.rootPath, element.label, true);
+        }
+        return item;
     }
 
     public getChildren(element?: ProjectNode | TagNode): Thenable<(ProjectNode | TagNode | InvestigationNode)[]> {

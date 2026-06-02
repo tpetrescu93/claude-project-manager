@@ -229,6 +229,24 @@ All claude invocations log full stdout/stderr to dedicated output channels (`Pro
 - **Cross-tree selection desync** — Favorites and Git rows use different `resourceUri` schemes (`projectManager-view` vs `projectManager-readonly-view`) so selecting a project in one tree doesn't highlight it in the other.
 - **Replaced upstream icons** — name-prefix PR status (e.g. `[✅] foo`) and `✔` tick badges from upstream were removed in favour of dedicated icon slots. Inline "open PR in new window" button replaced by Open PR + Post to Slack buttons.
 
+### Rich project tooltip — ✅ DONE
+Hovering a project/investigation row shows an at-a-glance card (`buildProjectTooltip` in `commands/projectTooltip.ts`), built **lazily via `StorageProvider.resolveTreeItem`** — `getTreeItem` clears the eager tooltip so VS Code invokes resolve only for the hovered node, and an 8s TTL cache absorbs hover jitter. The card is a `MarkdownString` with `supportThemeIcons` + `supportHtml` + `isTrusted` (HTML enables the colored spans).
+
+Layout (open PR):
+- **PR title + number** as a link, with **`· @author`** alongside it.
+- **`jira: <KEY>`** link on its own line — key extracted from the PR title's bracketed prefix, falling back to the branch's leading `key-number` convention; links to `wagestream.atlassian.net/browse/<KEY>`.
+- **Slack** link directly below Jira (from the Slack post store).
+- **`updated <age> ago`** from the PR's `updatedAt`.
+- **PR/CI status** — the `PrStatus` in words with a **colored icon** (green pass/approved, red failing/changes, amber pending/conflict, blue posted, purple merged) and neutral text.
+- **Diff stats** — `+additions` (green) `−deletions` (red) `· N files`, from the PR's computed merge diff; falls back to a local `git diff --shortstat <base>...HEAD` only when there's no PR (resolving the redundant-both decision in favour of PR-level-when-present).
+- **Unresolved vs total review threads** (red if any unresolved, green if all resolved) and a **conflicts-with-base** flag.
+- **git block** (lazy): branch + dirty/unpushed flags, all from a single `git status --porcelain=v2 --branch`.
+- **session block**: tmux uptime + Claude state (working / waiting for input / idle).
+
+Investigations skip the git block (no repo) and lead with a `$(search)` marker + path. Merged / no-PR rows drop the PR block and carry Jira / Slack / Open PR in a footer instead.
+
+**Data:** the 6s bulk GraphQL query was extended to also cache `title`, `author`, `updatedAt`, `additions`/`deletions`/`changedFiles`, and review-thread counts into a `PrMeta` map (`getPrMetaForPath`) — measured cost stays ~2 points (see Remote PR section). **Perf:** the common case (project has a PR) resolves with **3 fully-parallel shell-outs** (status, tmux, and nothing else — the local diff/base resolution runs only when there's no PR). The VS Code hover *delay* itself is the user setting `workbench.hover.delay` (default 500ms), out of the extension's control.
+
 ---
 
 ## Lifecycle hooks
@@ -305,37 +323,6 @@ The thinking/needs-input caches are in-memory only (unlike PR status, which pers
 
 ### Custom project description
 `projects.json` has no user-facing description field. Adding one (with fallback to the auto-populated parent-dir path) is ~50 lines: schema field + tree item read + context-menu command + showInputBox. Deferred — `description` slot is already populated with the parent path, which is the most useful signal.
-
-### Rich project tooltip (at-a-glance project card)
-The hover tooltip today (`ProjectNode` in `nodes.ts`) is a minimal `MarkdownString`: name, path, and the project-type icon/title. Enrich it into a proper at-a-glance card so hovering a project summarises its state without switching to it.
-
-**Fields (agreed set):**
-
-*From GitHub data already in the bulk query (free — select more fields / already cached):*
-- **PR title + number** — know *which* PR without opening it (e.g. "#26018 · route testing_utils through api_calls").
-- **PR link** — already cached in `prUrlCache` (`getPrUrlForPath`); clickable markdown link.
-- **Slack link** — already cached in the Slack post store (`getSlackPost`); clickable link to the posted message.
-- **PR/CI state** — the resolved `PrStatus` already drives the icon; spell it out in words here too (e.g. "✗ CI failing · 2 unresolved comments").
-- **Mergeable / conflict state** — already in the payload (`mergeable`); spell it out ("⚠ conflicts with base").
-- **Review comments — unresolved vs total** — e.g. "3 / 12 threads unresolved". The bulk query already fetches `reviewThreads(first:100) { nodes { isResolved } }` (currently only checked for "any unresolved"); add `totalCount` and count the unresolved `nodes` to get both figures with no extra request.
-- **PR-level diff stats** — `additions` / `deletions` / `changedFiles` on the PR node; GitHub's computed merge diff, no shell-out. **Open decision (deferred):** showing both this *and* a local `git diff` size may be redundant/confusing — pick one (likely PR-level when a PR exists, local git as the fallback for not-yet-pushed branches) rather than rendering both.
-
-*From local git (cheap shell-out, computed lazily on hover — see cost note):*
-- **Age** — branch age (first commit on the branch) and/or last-commit recency (`git log -1 --format=%cr`). Surfaces stale worktrees.
-- **Dirty working tree** — uncommitted / untracked file count; flags a worktree with unsaved work before you switch away.
-- **Unpushed commits** — ahead of `origin/<branch>` ("2 commits not pushed").
-- **Last commit** — message + author + relative time ("`fix: null guard` · you · 20m ago").
-
-*From tmux / Claude state already tracked (free):*
-- **Live session indicator** — whether a tmux session exists and its uptime ("session up 3h").
-- **Claude idle time** — last pane change → "Claude idle 12m" / "waiting for input"; complements the icon with a duration.
-
-*From extension state (in memory, free):*
-- **`kind`** — "Investigation" label for those rows.
-
-(Explicitly *not* including tags or assigned profile.)
-
-`MarkdownString` tooltips already support clickable links and `isTrusted` command URIs, so no WebviewView needed. Cost concern: the local-git calls (diff stat, log, status) are per-project shell-outs — compute them **lazily on hover** (VS Code calls `resolveTreeItem` only for the hovered node) and cache briefly, rather than eagerly in the 6s poll, so 50 projects don't each spawn `git` every cycle. PR / Slack / status / tmux fields are free (already in memory). Deferred — nice-to-have polish; the icon already carries the highest-value signal.
 
 ### Local git status
 Branch name, dirty count, ahead/behind. Would use `git status --porcelain=v1 -b` per favorite, plus filesystem watchers on `.git/HEAD` and `.git/index` for cheap near-instant updates. Deferred — PR/CI status covers higher-value signals.

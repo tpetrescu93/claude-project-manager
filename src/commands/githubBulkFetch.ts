@@ -5,7 +5,7 @@
 
 import { exec } from "child_process";
 import { promisify } from "util";
-import { PrStatus } from "./projectStatuses";
+import { PrStatus, PrMeta } from "./projectStatuses";
 
 const execAsync = promisify(exec);
 
@@ -48,10 +48,29 @@ export interface BulkFetchInput {
 export interface BulkFetchResult {
     status: PrStatus;
     url?: string;
+    meta?: PrMeta;
 }
 
 function escapeGraphqlString(s: string): string {
     return s.replace(/\\/g, "\\\\").replace(/"/g, "\\\"");
+}
+
+function buildMeta(open: any): PrMeta {
+    const threads = open.reviewThreads?.nodes || [];
+    const unresolved = threads.filter((t: any) => t && t.isResolved === false).length;
+    return {
+        number: open.number,
+        title: open.title || "",
+        author: open.author?.login || "",
+        updatedAt: open.updatedAt || "",
+        additions: open.additions ?? 0,
+        deletions: open.deletions ?? 0,
+        changedFiles: open.changedFiles ?? 0,
+        unresolvedThreads: unresolved,
+        totalThreads: open.reviewThreads?.totalCount ?? threads.length,
+        mergeable: open.mergeable || "UNKNOWN",
+        reviewDecision: open.reviewDecision || null,
+    };
 }
 
 function prsToStatus(prs: any[]): BulkFetchResult {
@@ -60,18 +79,28 @@ function prsToStatus(prs: any[]): BulkFetchResult {
     // so pick explicitly.
     const open = prs.find(p => p.state === "OPEN");
     if (open) {
-        if (open.mergeable === "CONFLICTING") { return { status: "open_conflicting", url: open.url }; }
+        const meta = buildMeta(open);
+        let status: PrStatus;
+        if (open.mergeable === "CONFLICTING") {
+            status = "open_conflicting";
         // "Changes requested" fires on a formal CHANGES_REQUESTED review OR any
         // unresolved review thread (an inline comment awaiting your reply/resolve).
         // Capped at "any" — we only care whether at least one is unresolved, not how many.
-        const hasUnresolvedThread = (open.reviewThreads?.nodes || []).some((t: any) => t && t.isResolved === false);
-        if (open.reviewDecision === "CHANGES_REQUESTED" || hasUnresolvedThread) { return { status: "changes_requested", url: open.url }; }
-        const rollup = open.statusCheckRollup?.state;
-        if (rollup === "PENDING" || rollup === "EXPECTED") { return { status: "open_pending", url: open.url }; }
-        if (rollup === "FAILURE" || rollup === "ERROR") { return { status: "open_failing", url: open.url }; }
-        // SUCCESS or no checks
-        if (open.reviewDecision === "APPROVED") { return { status: "open_approved", url: open.url }; }
-        return { status: "open_passing", url: open.url };
+        } else if (open.reviewDecision === "CHANGES_REQUESTED" || meta.unresolvedThreads > 0) {
+            status = "changes_requested";
+        } else {
+            const rollup = open.statusCheckRollup?.state;
+            if (rollup === "PENDING" || rollup === "EXPECTED") {
+                status = "open_pending";
+            } else if (rollup === "FAILURE" || rollup === "ERROR") {
+                status = "open_failing";
+            } else if (open.reviewDecision === "APPROVED") {
+                status = "open_approved";
+            } else {
+                status = "open_passing";
+            }
+        }
+        return { status, url: open.url, meta };
     }
     // No open PR — look at most recent merged
     const merged = prs
@@ -114,7 +143,7 @@ export async function bulkFetchPrStatuses(inputs: BulkFetchInput[]): Promise<Map
         query += ` ${alias}: repository(owner:"${owner}", name:"${repo}") {`;
         items.forEach((item, i) => {
             const branch = escapeGraphqlString(item.branch);
-            query += ` p${i}: pullRequests(headRefName:"${branch}", states:[OPEN,MERGED], orderBy:{field:UPDATED_AT,direction:DESC}, first:3) { nodes { number url state mergeable reviewDecision mergedAt statusCheckRollup { state } reviewThreads(first:100) { nodes { isResolved } } } }`;
+            query += ` p${i}: pullRequests(headRefName:"${branch}", states:[OPEN,MERGED], orderBy:{field:UPDATED_AT,direction:DESC}, first:3) { nodes { number title url state mergeable reviewDecision mergedAt updatedAt additions deletions changedFiles author { login } statusCheckRollup { state } reviewThreads(first:100) { totalCount nodes { isResolved } } } }`;
         });
         query += " }";
     }

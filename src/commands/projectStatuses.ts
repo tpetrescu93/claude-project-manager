@@ -24,8 +24,23 @@ const CLAUDE_INTERVAL_MS = 2_000;
 
 export type PrStatus = "open_passing" | "open_posted" | "open_approved" | "changes_requested" | "open_failing" | "open_pending" | "open_conflicting" | "merged" | "no_pr" | null;
 
+export interface PrMeta {
+    number: number;
+    title: string;
+    author: string;               // GitHub login of the PR author
+    updatedAt: string;            // ISO timestamp of the PR's last update
+    additions: number;
+    deletions: number;
+    changedFiles: number;
+    unresolvedThreads: number;
+    totalThreads: number;
+    mergeable: string;            // MERGEABLE | CONFLICTING | UNKNOWN
+    reviewDecision: string | null; // APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED | null
+}
+
 const statusCache = new Map<string, PrStatus>();
 const prUrlCache = new Map<string, string>();
+const prMetaCache = new Map<string, PrMeta>();
 const claudeThinkingCache = new Map<string, boolean>();
 const claudeNeedsInputCache = new Map<string, boolean>();
 const lastPaneContentCache = new Map<string, string>();
@@ -90,6 +105,10 @@ export function getPrStatusForPath(rootPath: string): PrStatus {
 
 export function getPrUrlForPath(rootPath: string): string | undefined {
     return prUrlCache.get(rootPath);
+}
+
+export function getPrMetaForPath(rootPath: string): PrMeta | undefined {
+    return prMetaCache.get(rootPath);
 }
 
 export function isClaudeThinkingForPath(rootPath: string): boolean {
@@ -223,7 +242,14 @@ async function updateGitStatuses(projectStorage: ProjectStorage, providerManager
     }
 }
 
-function applyStatusUpdate(rootPath: string, result: { status: PrStatus; url?: string }, providerManager: Providers) {
+function applyStatusUpdate(rootPath: string, result: { status: PrStatus; url?: string; meta?: PrMeta }, providerManager: Providers) {
+    // PR metadata (for the hover tooltip) — store when an open PR was found,
+    // drop otherwise so a stale card doesn't linger after merge/close.
+    if (result.meta) {
+        prMetaCache.set(rootPath, result.meta);
+    } else {
+        prMetaCache.delete(rootPath);
+    }
     // "Posted to Slack" overlay: once a PR has been posted (a permalink is stored),
     // show open_posted instead of the plain green "passing, awaiting review" state.
     // Leaves actionable states (conflicting/changes_requested/failing/pending) and
