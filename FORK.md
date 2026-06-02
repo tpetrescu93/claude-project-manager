@@ -71,7 +71,7 @@ The cycle resolves `(branch, owner, repo)` per project locally (`git rev-parse` 
 query {
   r0: repository(owner:"wagestream", name:"paydays-api") {
     p0: pullRequests(headRefName:"branch-a", states:[OPEN,MERGED], orderBy:{field:UPDATED_AT,direction:DESC}, first:3) {
-      nodes { number url state mergeable reviewDecision mergedAt statusCheckRollup { state } }
+      nodes { number url state mergeable reviewDecision mergedAt statusCheckRollup { state } reviewThreads(first:100) { nodes { isResolved } } }
     }
     p1: pullRequests(headRefName:"branch-b", ...) { ... }
   }
@@ -88,12 +88,12 @@ Response handling per PR: prefer an OPEN PR (then map to conflicting / changes_r
 - GitHub's REST limit is 5000 req/hr; at N=15 projects, REST polling capped at ~22s minimum to stay safe. GraphQL counts as 1 request per cycle, freeing the cadence.
 - `statusCheckRollup.state` (PENDING/SUCCESS/FAILURE/ERROR/EXPECTED) is the pre-deduped overall state, so the historical-run dedup logic we needed against `gh pr list --json statusCheckRollup` is gone — GitHub does it for us.
 
-**Polling cadence:** 6 seconds. Math: 600 queries/hr, each lean query ≈ 1 GraphQL point (we only ask for `statusCheckRollup.state`, not individual `contexts`), well under the 5000-point/hr GraphQL limit. If we asked for individual check runs we'd be at ~10 pts/query (over limit at this cadence) — that's why the query stays lean.
+**Polling cadence:** 6 seconds. Math: 600 queries/hr, each query ≈ 1–2 GraphQL points (1 for status alone; 2 once `reviewThreads` is included at ~47-PR scale) — ~1,200 pts/hr, well under the 5000-point/hr GraphQL limit. We still avoid individual `contexts` (asking for check runs would be ~10 pts/query, over limit at this cadence) — that's why the query stays lean apart from the cheap thread scan.
 
 **Status enum** (`PrStatus`):
 - `open_passing` — green check (CI green, no/awaiting review)
 - `open_approved` — green double-check (`check-all`); CI green AND `reviewDecision === APPROVED`
-- `changes_requested` — red `request-changes`; a human requested changes
+- `changes_requested` — red `request-changes`; a formal CHANGES_REQUESTED review **or** ≥1 unresolved review thread (an inline comment awaiting your reply/resolve)
 - `open_failing` — red ✗
 - `open_pending` — yellow spinner
 - `open_conflicting` — yellow exclamation circle (conflicts beat CI; CI is moot until rebase)
@@ -104,6 +104,8 @@ Response handling per PR: prefer an OPEN PR (then map to conflicting / changes_r
 **Precedence** (first match wins): conflicting → changes_requested → CI failing → CI pending → approved → passing.
 
 **Review detection:** `reviewDecision` is GitHub's computed decision and respects CODEOWNERS / branch-protection (not "one approval = approved"). It's `null` on repos with no required reviews, so `open_approved` only appears on protected repos.
+
+**Unresolved-comment detection:** `changes_requested` also fires on any open review thread (`reviewThreads.nodes[].isResolved === false`), independent of `reviewDecision` — so an inline comment you haven't replied to/resolved surfaces the red state even without a formal "request changes" review. Capped at "any unresolved" (we don't count them — one is enough). `first:100` caps the thread scan; a PR with >100 threads where every unresolved one sits past the first 100 would be missed, which is implausible in practice. **Cost/latency:** fetching `reviewThreads` is server-side work GitHub does per PR — at ~47 PRs it nudges the bulk query from 1 → 2 GraphQL points and adds ~1s wall-clock (≈3.2s → ≈4.2s median, measured 2026-06-02). Harmless: the fetch is a 6s background poll that updates icons asynchronously and never blocks the UI, with ample headroom under the 6s interval. The watched-node incremental scheme (poll one cached unresolved thread by ID, re-scan on resolve) was designed to avoid this +1s but rejected — it trades one background query for a per-cycle state machine plus its own round-trips, to shave latency off something that doesn't block anything.
 
 **Important quirks handled:**
 - We query `statusCheckRollup.state` (GitHub's precomputed overall rollup), so the historical-run dedup we needed against the old REST `gh pr list --json statusCheckRollup` is no longer necessary — GitHub returns the deduped state directly.

@@ -61,7 +61,11 @@ function prsToStatus(prs: any[]): BulkFetchResult {
     const open = prs.find(p => p.state === "OPEN");
     if (open) {
         if (open.mergeable === "CONFLICTING") { return { status: "open_conflicting", url: open.url }; }
-        if (open.reviewDecision === "CHANGES_REQUESTED") { return { status: "changes_requested", url: open.url }; }
+        // "Changes requested" fires on a formal CHANGES_REQUESTED review OR any
+        // unresolved review thread (an inline comment awaiting your reply/resolve).
+        // Capped at "any" — we only care whether at least one is unresolved, not how many.
+        const hasUnresolvedThread = (open.reviewThreads?.nodes || []).some((t: any) => t && t.isResolved === false);
+        if (open.reviewDecision === "CHANGES_REQUESTED" || hasUnresolvedThread) { return { status: "changes_requested", url: open.url }; }
         const rollup = open.statusCheckRollup?.state;
         if (rollup === "PENDING" || rollup === "EXPECTED") { return { status: "open_pending", url: open.url }; }
         if (rollup === "FAILURE" || rollup === "ERROR") { return { status: "open_failing", url: open.url }; }
@@ -110,7 +114,7 @@ export async function bulkFetchPrStatuses(inputs: BulkFetchInput[]): Promise<Map
         query += ` ${alias}: repository(owner:"${owner}", name:"${repo}") {`;
         items.forEach((item, i) => {
             const branch = escapeGraphqlString(item.branch);
-            query += ` p${i}: pullRequests(headRefName:"${branch}", states:[OPEN,MERGED], orderBy:{field:UPDATED_AT,direction:DESC}, first:3) { nodes { number url state mergeable reviewDecision mergedAt statusCheckRollup { state } } }`;
+            query += ` p${i}: pullRequests(headRefName:"${branch}", states:[OPEN,MERGED], orderBy:{field:UPDATED_AT,direction:DESC}, first:3) { nodes { number url state mergeable reviewDecision mergedAt statusCheckRollup { state } reviewThreads(first:100) { nodes { isResolved } } } }`;
         });
         query += " }";
     }
