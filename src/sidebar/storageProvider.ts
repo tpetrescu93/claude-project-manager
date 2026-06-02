@@ -89,16 +89,23 @@ export class StorageProvider implements vscode.TreeDataProvider<ProjectNode | Ta
         this.internalOnDidChangeTreeData.fire(node);
     }
 
-    public handleDrag(source: readonly (ProjectNode | TagNode)[], dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): void {
-        const projectNodes = source.filter((s): s is ProjectNode => s instanceof ProjectNode);
-        if (projectNodes.length === 0) { return; }
+    // Both project rows and investigation rows are reorderable; their path lives
+    // in different fields (preview.path vs rootPath).
+    private static nodePath(n: ProjectNode | InvestigationNode): string {
+        return n instanceof ProjectNode ? n.preview.path : n.rootPath;
+    }
 
-        const paths = projectNodes.map(n => n.preview.path);
+    public handleDrag(source: readonly (ProjectNode | TagNode | InvestigationNode)[], dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): void {
+        const draggable = source.filter((s): s is ProjectNode | InvestigationNode =>
+            s instanceof ProjectNode || s instanceof InvestigationNode);
+        if (draggable.length === 0) { return; }
+
+        const paths = draggable.map(n => StorageProvider.nodePath(n));
         dataTransfer.set(StorageProvider.DRAG_MIME_TYPE, new vscode.DataTransferItem(paths));
     }
 
-    public async handleDrop(target: ProjectNode | TagNode | undefined, dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): Promise<void> {
-        if (!target || !(target instanceof ProjectNode)) { return; }
+    public async handleDrop(target: ProjectNode | TagNode | InvestigationNode | undefined, dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): Promise<void> {
+        if (!target || !(target instanceof ProjectNode || target instanceof InvestigationNode)) { return; }
 
         const transferItem = dataTransfer.get(StorageProvider.DRAG_MIME_TYPE);
         if (!transferItem) { return; }
@@ -106,7 +113,7 @@ export class StorageProvider implements vscode.TreeDataProvider<ProjectNode | Ta
         const sourcePaths: string[] = transferItem.value;
         if (!sourcePaths || sourcePaths.length === 0) { return; }
 
-        this.projectSource.moveProject(sourcePaths[ 0 ], target.preview.path);
+        this.projectSource.moveProject(sourcePaths[ 0 ], StorageProvider.nodePath(target));
         this.refresh();
     }
 
