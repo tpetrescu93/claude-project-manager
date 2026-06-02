@@ -34,7 +34,7 @@ export class StorageProvider implements vscode.TreeDataProvider<ProjectNode | Ta
 
     private projectSource: ProjectStorage;
     private internalOnDidChangeTreeData: vscode.EventEmitter<ProjectNode | TagNode | InvestigationNode | void> = new vscode.EventEmitter<ProjectNode | TagNode | InvestigationNode | void>();
-    private nodesByPath = new Map<string, ProjectNode>();
+    private nodesByPath = new Map<string, ProjectNode | InvestigationNode>();
     private static readonly TAGS_EXPANSION_STATE_KEY = "projectsExplorerFavorites.tagsExpansionState";
 
     constructor(projectSource: ProjectStorage) {
@@ -202,7 +202,11 @@ export class StorageProvider implements vscode.TreeDataProvider<ProjectNode | Ta
     private buildNode(prj: ProjectInQuickPick): ProjectNode | InvestigationNode {
         const expandedPath = PathUtils.expandHomePath(prj.description);
         if (prj.kind === "investigation") {
-            return new InvestigationNode(prj.label, expandedPath, prj.profile);
+            const invNode = new InvestigationNode(prj.label, expandedPath, prj.profile);
+            // Register so the targeted poll refresh (refreshProjectNode) can update
+            // its Claude status icon in place, same as a normal ProjectNode.
+            this.nodesByPath.set(expandedPath, invNode);
+            return invNode;
         }
         let iconFavorites = "favorites";
         if (path.extname(prj.description) === ".code-workspace") {
