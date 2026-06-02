@@ -8,7 +8,7 @@ import { spawn } from "child_process";
 import { Container } from "../core/container";
 import { ProjectNode } from "../sidebar/nodes";
 import { getPrUrlForPath } from "./projectStatuses";
-import { setSlackPost } from "./slackPostStore";
+import { setSlackPost, getSlackPost, deleteSlackPost } from "./slackPostStore";
 import { snapshotSessionFiles, cleanupNewSessions } from "./claudeSessions";
 
 const SLACK_POST_MARKER = /^SLACK_POST:\s*(https?:\/\/\S+)/m;
@@ -105,8 +105,23 @@ async function postPrToSlack(node: ProjectNode) {
     });
 }
 
+async function removeSlackPost(node: ProjectNode) {
+    const rootPath: string = node?.preview?.path ?? node?.command?.arguments?.[ 0 ];
+    if (!rootPath) { return; }
+    if (!getSlackPost(rootPath)) {
+        window.showInformationMessage(l10n.t("No Slack link stored for this project."));
+        return;
+    }
+    deleteSlackPost(rootPath);
+    // The "posted to Slack" status is a poll-time overlay derived from the stored
+    // link, so the icon reverts to plain "passing" on the next status poll (~6s).
+    // Removing the link also means the merged-PR reaction won't fire for this PR.
+    window.showInformationMessage(l10n.t("Removed the Slack link for this project."));
+}
+
 export function registerPostPrToSlack() {
     Container.context.subscriptions.push(
-        commands.registerCommand("_projectManager.postPrToSlack", (node: ProjectNode) => postPrToSlack(node))
+        commands.registerCommand("_projectManager.postPrToSlack", (node: ProjectNode) => postPrToSlack(node)),
+        commands.registerCommand("_projectManager.removeSlackPost", (node: ProjectNode) => removeSlackPost(node))
     );
 }

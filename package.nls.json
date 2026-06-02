@@ -71,6 +71,7 @@
     "projectManager.commands.sortByRecent#sideBarFavorites.title": "Sort by Recent",
     "projectManager.commands.sortByStatus#sideBarFavorites.title": "Sort by Status",
     "projectManager.commands.postPrToSlack.title": "Post PR to Slack",
+    "projectManager.commands.removeSlackPost.title": "Remove Slack Link",
     "projectManager.commands.filterProjectsByTag#sideBar.title": "Filter Projects by Tag",
     "projectManager.commands.filterProjectsByTag.title": "Project Manager: Filter Projects by Tag",
     "projectManager.commands.addToFavorites.title": "Add to Favorites",
