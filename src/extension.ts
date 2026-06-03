@@ -141,24 +141,25 @@ export async function activate(context: vscode.ExtensionContext) {
         // `=` forces exact-match: tmux -t otherwise prefix-matches, so a project whose
         // name is a prefix of another (e.g. foo vs foo-pt2) would attach to the wrong session.
         const cmd = `tmux attach -t "=${sessionName}" 2>/dev/null || tmux new -s "${sessionName}"`;
+        const folders = vscode.workspace.workspaceFolders ?? [];
+        const isCurrentWorkspace = folders.some(f => path.resolve(f.uri.fsPath) === path.resolve(rootPath));
+
+        // Current project's session: born directly in the editor area (no panel
+        // flash, nothing to move). A different project's session: born in the
+        // default location, then popped into a floating (auxiliary) window so you
+        // get it without switching workspace. moveIntoNewWindow needs the terminal
+        // focused via workbench.action.terminal.focus first — which targets the
+        // panel group, so that path must NOT use an editor-location terminal.
         const terminal = vscode.window.createTerminal({
             name: expectedName,
             cwd: rootPath,
             shellPath: "/bin/bash",
-            shellArgs: [ "-c", cmd ]
+            shellArgs: [ "-c", cmd ],
+            ...(isCurrentWorkspace ? { location: vscode.TerminalLocation.Editor } : {})
         });
         terminal.show();
 
-        // If this session belongs to the project that's already open, dock it as an
-        // editor tab in this window. If it belongs to a DIFFERENT project, pop it into
-        // a floating (auxiliary) window instead, so you get the session without
-        // switching your current workspace. Both commands act on the focused terminal,
-        // which show() above makes ours.
-        const folders = vscode.workspace.workspaceFolders ?? [];
-        const isCurrentWorkspace = folders.some(f => path.resolve(f.uri.fsPath) === path.resolve(rootPath));
-        if (isCurrentWorkspace) {
-            await vscode.commands.executeCommand("workbench.action.terminal.moveToEditor");
-        } else {
+        if (!isCurrentWorkspace) {
             await vscode.commands.executeCommand("workbench.action.terminal.focus");
             await vscode.commands.executeCommand("workbench.action.terminal.moveIntoNewWindow");
         }
