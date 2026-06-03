@@ -966,7 +966,7 @@
 				},
 				{
 					"command": "_projectManager.renameProject",
-					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
+					"when": "view == projectsExplorerFavorites && viewItem =~ /^(ProjectNodeKind|InvestigationNodeKind)$/",
 					"group": "favorites"
 				},
 				{
