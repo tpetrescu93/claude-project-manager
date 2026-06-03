@@ -28,6 +28,45 @@ function slugify(name: string): string {
     return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "investigation";
 }
 
+const ADJECTIVES = [
+    "amber", "azure", "bold", "brave", "bright", "calm", "clever", "cool",
+    "crisp", "curious", "dark", "deep", "eager", "early", "empty", "fair",
+    "fast", "fierce", "fluent", "fond", "free", "fresh", "gentle", "glad",
+    "grand", "green", "grey", "heavy", "hidden", "hollow", "honest", "keen",
+    "large", "late", "light", "lively", "lone", "long", "lucky", "mellow",
+    "muted", "narrow", "neat", "nimble", "noble", "odd", "open", "patient",
+    "plain", "proud", "pure", "quick", "quiet", "rapid", "rare", "ready",
+    "rich", "round", "royal", "rusty", "safe", "sharp", "shiny", "short",
+    "shy", "silent", "simple", "sleek", "slim", "slow", "small", "smart",
+    "soft", "solid", "stern", "still", "strong", "sturdy", "subtle", "swift",
+    "tall", "tame", "thin", "tidy", "tiny", "tough", "warm", "wide", "wild",
+    "wise", "witty", "wry", "young", "zealous", "zesty",
+];
+const NOUNS = [
+    "badger", "bear", "beetle", "bird", "boar", "brook", "buck", "bug",
+    "cave", "cedar", "cliff", "cloud", "coral", "crane", "creek", "crow",
+    "dawn", "deer", "delta", "dune", "dust", "eagle", "echo", "fern",
+    "field", "finch", "flame", "flint", "flood", "fog", "forest", "fox",
+    "frog", "frost", "gale", "glen", "gloom", "grove", "hawk", "heath",
+    "heron", "hill", "hive", "hollow", "hound", "iris", "island", "ivy",
+    "jay", "kelp", "kite", "lake", "lark", "leaf", "ledge", "light",
+    "lime", "lynx", "marsh", "mist", "moon", "moose", "moth", "mouse",
+    "mule", "nest", "night", "oak", "otter", "owl", "path", "peak",
+    "pine", "plain", "pond", "pool", "quail", "rain", "raven", "reed",
+    "reef", "ridge", "river", "robin", "rock", "root", "rose", "rush",
+    "sage", "sand", "seed", "shade", "shore", "shrew", "shrub", "sky",
+    "slug", "smoke", "snail", "snake", "snow", "sparrow", "spider", "spring",
+    "stag", "star", "stem", "stone", "stork", "storm", "stream", "swan",
+    "swift", "thorn", "tide", "toad", "trail", "tree", "vale", "vine",
+    "vole", "wasp", "wave", "weed", "wolf", "wren",
+];
+
+function generateInvestigationName(): string {
+    const adj = ADJECTIVES[ Math.floor(Math.random() * ADJECTIVES.length) ];
+    const noun = NOUNS[ Math.floor(Math.random() * NOUNS.length) ];
+    return `${adj}-${noun}`;
+}
+
 function projects(projectStorage: ProjectStorage): Array<{ name: string; rootPath: string; kind?: string }> {
     return (projectStorage as any).projects;
 }
@@ -53,20 +92,11 @@ function createScratchDir(name: string): string {
 }
 
 async function newInvestigation(projectStorage: ProjectStorage, providerManager: Providers) {
-    const name = await window.showInputBox({
-        prompt: l10n.t("Investigation name"),
-        placeHolder: l10n.t("e.g. why is the repayment calc returning None")
-    });
-    if (!name || !name.trim()) { return; }
-
+    const name = generateInvestigationName();
     const cwd = createScratchDir(name);
-
-    projectStorage.push(name.trim(), cwd, INVESTIGATION_KIND);
+    projectStorage.push(name, cwd, INVESTIGATION_KIND);
     projectStorage.save();
     providerManager.refreshStorageTreeView();
-    // Deliberately NOT starting a tmux/claude session here — creation just
-    // registers the investigation. Start it via "Open Tmux Session".
-    window.showInformationMessage(l10n.t("Investigation \"{0}\" created.", name.trim()));
 }
 
 async function openInvestigationTmux(arg: InvestigationNode | string, projectStorage: ProjectStorage) {
