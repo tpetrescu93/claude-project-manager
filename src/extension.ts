@@ -148,10 +148,20 @@ export async function activate(context: vscode.ExtensionContext) {
             shellArgs: [ "-c", cmd ]
         });
         terminal.show();
-        // Move out of the Terminal panel and into the editor area as its own tab.
-        // VS Code's command operates on the currently-focused terminal, which the
-        // show() above makes ours.
-        await vscode.commands.executeCommand("workbench.action.terminal.moveToEditor");
+
+        // If this session belongs to the project that's already open, dock it as an
+        // editor tab in this window. If it belongs to a DIFFERENT project, pop it into
+        // a floating (auxiliary) window instead, so you get the session without
+        // switching your current workspace. Both commands act on the focused terminal,
+        // which show() above makes ours.
+        const folders = vscode.workspace.workspaceFolders ?? [];
+        const isCurrentWorkspace = folders.some(f => path.resolve(f.uri.fsPath) === path.resolve(rootPath));
+        if (isCurrentWorkspace) {
+            await vscode.commands.executeCommand("workbench.action.terminal.moveToEditor");
+        } else {
+            await vscode.commands.executeCommand("workbench.action.terminal.focus");
+            await vscode.commands.executeCommand("workbench.action.terminal.moveIntoNewWindow");
+        }
     });
 
     // register commands (here, because it needs to be used right below if an invalid JSON is present)
