@@ -3,52 +3,48 @@
 *  Licensed under the GPLv3 License. See License.md in the project root for license information.
 *--------------------------------------------------------------------------------------------*/
 
-import { commands, l10n, OutputChannel, ProgressLocation, window } from "vscode";
+import { commands, l10n, window } from "vscode";
 import { spawn } from "child_process";
+import * as os from "os";
+import * as path from "path";
 import { Container } from "../core/container";
 import { ProjectNode } from "../sidebar/nodes";
 import { getPrUrlForPath } from "./projectStatuses";
-import { setSlackPost, getSlackPost, deleteSlackPost } from "./slackPostStore";
-import { snapshotSessionFiles, cleanupNewSessions } from "./claudeSessions";
+import { getSlackPost, deleteSlackPost, slackPostFilePath } from "./slackPostStore";
+import { projectSessionDir, encodeProjectDir } from "./claudeSessions";
 
-const SLACK_POST_MARKER = /^SLACK_POST:\s*(https?:\/\/\S+)/m;
+const POST_PROMPT = "Use the pr-slack skill to post the current branch's PR to Slack. Do not ask for confirmation.";
 
-let output: OutputChannel | undefined;
-function log(): OutputChannel {
-    if (!output) { output = window.createOutputChannel("Project Manager: Slack"); }
-    return output;
+function shellQuote(s: string): string {
+    return `'${s.replace(/'/g, "'\\''")}'`;
 }
 
-interface RunResult { ok: boolean; code: number | null; stdout: string; stderr: string; }
-
-function runClaude(rootPath: string, prompt: string): Promise<RunResult> {
-    // Snapshot existing sessions so we can delete the throwaway transcript this
-    // headless run creates — otherwise it becomes the project's "newest" session
-    // and Fork/resume would pick it up instead of the real working session.
-    const before = snapshotSessionFiles(rootPath);
-    return new Promise((resolve) => {
-        const child = spawn(
-            "claude",
-            [ "-p", prompt, "--dangerously-skip-permissions" ],
-            { cwd: rootPath, shell: false }
-        );
-        let stdout = "";
-        let stderr = "";
-        child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
-        child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
-        child.on("error", (err) => { cleanupNewSessions(rootPath, before); resolve({ ok: false, code: null, stdout, stderr: stderr + err.message }); });
-        child.on("close", (code) => { cleanupNewSessions(rootPath, before); resolve({ ok: code === 0, code, stdout, stderr }); });
-    });
-}
-
-function summariseFailure(result: RunResult): string {
-    // Claude's headless mode writes its final answer to stdout. If it failed
-    // mid-task, the last few lines of stdout usually explain why; stderr
-    // covers spawn/exec errors. Prefer stdout when it's non-empty.
-    const source = result.stdout.trim() || result.stderr.trim();
-    if (!source) { return l10n.t("Exit code {0} with no output", String(result.code)); }
-    const lines = source.split("\n").map(l => l.trim()).filter(Boolean);
-    return lines[ lines.length - 1 ].slice(0, 200);
+/**
+ * Build a self-contained bash script that posts to Slack and records the result
+ * ITSELF — so it survives a workspace switch tearing down the extension host.
+ * It runs `claude -p`, greps the SLACK_POST permalink, writes it to the project's
+ * store file, logs the full output, and deletes the throwaway session transcript
+ * the headless run created (snapshot/diff in-shell, since the JS close handler
+ * would die with the ext host).
+ */
+function buildPostScript(rootPath: string): string {
+    const store = shellQuote(slackPostFilePath(rootPath));
+    const logFile = shellQuote(path.join(os.homedir(), ".project-manager", "slack-logs", `${encodeProjectDir(rootPath)}.log`));
+    const sdir = shellQuote(projectSessionDir(rootPath));
+    const cwd = shellQuote(rootPath);
+    const prompt = shellQuote(POST_PROMPT);
+    return [
+        `mkdir -p "$(dirname ${store})" "$(dirname ${logFile})" 2>/dev/null`,
+        `sdir=${sdir}`,
+        // Snapshot existing transcripts (pipe-delimited) before the run.
+        `before="|"; for f in "$sdir"/*.jsonl; do [ -e "$f" ] && before="$before$f|"; done`,
+        `out=$(cd ${cwd} && claude -p ${prompt} --dangerously-skip-permissions 2>&1)`,
+        `printf '%s\\n' "$out" > ${logFile}`,
+        `url=$(printf '%s\\n' "$out" | grep -oE '^SLACK_POST:[[:space:]]*https?://[^[:space:]]+' | head -1 | sed -E 's/^SLACK_POST:[[:space:]]*//')`,
+        `[ -n "$url" ] && printf '%s' "$url" > ${store}`,
+        // Delete any transcript that appeared since the snapshot (+ its subagent dir).
+        `for f in "$sdir"/*.jsonl; do [ -e "$f" ] || continue; case "$before" in *"|$f|"*) ;; *) rm -f "$f"; id=$(basename "$f" .jsonl); rm -rf "$sdir/$id";; esac; done`,
+    ].join("\n");
 }
 
 async function postPrToSlack(node: ProjectNode) {
@@ -68,41 +64,20 @@ async function postPrToSlack(node: ProjectNode) {
     );
     if (!confirmed) { return; }
 
-    await window.withProgress({
-        location: ProgressLocation.Notification,
-        title: l10n.t("Posting PR to Slack..."),
-        cancellable: false
-    }, async () => {
-        const startedAt = new Date().toISOString();
-        const channel = log();
-        channel.appendLine(`\n=== ${startedAt} :: ${rootPath} ===`);
-        channel.appendLine(`PR URL: ${url}`);
-        const result = await runClaude(
-            rootPath,
-            "Use the pr-slack skill to post the current branch's PR to Slack. Do not ask for confirmation."
-        );
-        channel.appendLine(`exit code: ${result.code}`);
-        if (result.stdout) { channel.appendLine(`--- stdout ---\n${result.stdout}`); }
-        if (result.stderr) { channel.appendLine(`--- stderr ---\n${result.stderr}`); }
-
-        if (result.ok) {
-            const match = result.stdout.match(SLACK_POST_MARKER);
-            if (match) {
-                setSlackPost(rootPath, match[ 1 ]);
-                channel.appendLine(`stored slack permalink: ${match[ 1 ]}`);
-            } else {
-                channel.appendLine("no SLACK_POST marker found in stdout — merge reaction will not fire for this PR");
-            }
-            window.showInformationMessage(l10n.t("Posted to Slack."));
-        } else {
-            const summary = summariseFailure(result);
-            const choice = await window.showErrorMessage(
-                l10n.t("Failed to post to Slack: {0}", summary),
-                l10n.t("Show Logs")
-            );
-            if (choice) { channel.show(true); }
-        }
+    // Detached + unref'd so the post completes and records itself even if you
+    // switch workspaces (which reloads the extension host) before it finishes.
+    // The row flips to the "posted to Slack" icon on the next status poll once
+    // the script writes the permalink file.
+    const child = spawn("bash", [ "-lc", buildPostScript(rootPath) ], {
+        cwd: rootPath,
+        detached: true,
+        stdio: "ignore",
     });
+    child.unref();
+
+    window.showInformationMessage(
+        l10n.t("Posting PR to Slack in the background — the row updates to the “posted” icon once it lands. Safe to switch workspaces.")
+    );
 }
 
 async function removeSlackPost(node: ProjectNode) {
