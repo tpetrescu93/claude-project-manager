@@ -400,6 +400,11 @@
 				"icon": "$(terminal)"
 			},
 			{
+				"command": "_projectManager.forkInvestigation",
+				"title": "%projectManager.commands.forkInvestigation.title%",
+				"icon": "$(git-branch)"
+			},
+			{
 				"command": "_projectManager.promoteInvestigation",
 				"title": "%projectManager.commands.promoteInvestigation.title%",
 				"icon": "$(rocket)"
@@ -511,6 +516,10 @@
 				},
 				{
 					"command": "_projectManager.openInvestigationTmux",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.forkInvestigation",
 					"when": "false"
 				},
 				{
@@ -827,6 +836,11 @@
 				},
 				{
 					"command": "_projectManager.openInvestigationTmux",
+					"when": "view == projectsExplorerFavorites && viewItem == InvestigationNodeKind",
+					"group": "investigation"
+				},
+				{
+					"command": "_projectManager.forkInvestigation",
 					"when": "view == projectsExplorerFavorites && viewItem == InvestigationNodeKind",
 					"group": "investigation"
 				},

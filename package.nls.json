@@ -51,6 +51,7 @@
     "projectManager.commands.forkProject.title": "Fork Project + Claude Session...",
     "projectManager.commands.newInvestigation.title": "New Investigation",
     "projectManager.commands.openInvestigationTmux.title": "Open Tmux Session",
+    "projectManager.commands.forkInvestigation.title": "Fork Investigation + Claude Session...",
     "projectManager.commands.promoteInvestigation.title": "Promote to Project...",
     "projectManager.commands.deleteInvestigation.title": "Delete Investigation",
     "projectManager.commands.archiveProject.title": "Archive",

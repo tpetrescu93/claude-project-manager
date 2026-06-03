@@ -39,14 +39,9 @@ function findInvestigation(arg: InvestigationNode | string | undefined, projectS
     return projects(projectStorage).find(p => p.rootPath === rootPath && p.kind === INVESTIGATION_KIND);
 }
 
-async function newInvestigation(projectStorage: ProjectStorage, providerManager: Providers) {
-    const name = await window.showInputBox({
-        prompt: l10n.t("Investigation name"),
-        placeHolder: l10n.t("e.g. why is the repayment calc returning None")
-    });
-    if (!name || !name.trim()) { return; }
-
-    // Folder in ~/projects, unique-suffixed so two same-named investigations don't collide.
+// Create an empty scratch folder in ~/projects for an investigation, unique-suffixed
+// so two same-named investigations don't collide.
+function createScratchDir(name: string): string {
     let dirName = slugify(name);
     let cwd = path.join(PROJECTS_BASE, dirName);
     if (fs.existsSync(cwd)) {
@@ -54,6 +49,17 @@ async function newInvestigation(projectStorage: ProjectStorage, providerManager:
         cwd = path.join(PROJECTS_BASE, dirName);
     }
     fs.mkdirSync(cwd, { recursive: true });
+    return cwd;
+}
+
+async function newInvestigation(projectStorage: ProjectStorage, providerManager: Providers) {
+    const name = await window.showInputBox({
+        prompt: l10n.t("Investigation name"),
+        placeHolder: l10n.t("e.g. why is the repayment calc returning None")
+    });
+    if (!name || !name.trim()) { return; }
+
+    const cwd = createScratchDir(name);
 
     projectStorage.push(name.trim(), cwd, INVESTIGATION_KIND);
     projectStorage.save();
@@ -164,10 +170,71 @@ async function promoteInvestigation(arg: InvestigationNode | string, projectStor
     });
 }
 
+/**
+ * Fork (split) an investigation: spin up a NEW scratch investigation that carries
+ * the source's Claude session (transcript copied + cwd-rewritten) and resume it,
+ * leaving the source intact — so one line of investigation branches into two.
+ */
+async function forkInvestigation(arg: InvestigationNode | string, projectStorage: ProjectStorage, providerManager: Providers) {
+    const inv = findInvestigation(arg, projectStorage);
+    if (!inv) { return; }
+
+    const nameInput = await window.showInputBox({
+        prompt: l10n.t("New investigation name"),
+        value: `${inv.name} (fork)`,
+        validateInput: (value) => (!value || !value.trim()) ? l10n.t("Name is required") : undefined
+    });
+    if (!nameInput) { return; }
+    const newName = nameInput.trim();
+
+    const sessionId = latestSessionId(inv.rootPath);
+
+    await window.withProgress({
+        location: ProgressLocation.Notification,
+        title: l10n.t("Forking investigation..."),
+        cancellable: false
+    }, async (progress) => {
+        try {
+            const targetDir = createScratchDir(newName);
+
+            let resumeId: string | undefined;
+            if (sessionId) {
+                progress.report({ message: l10n.t("Carrying Claude session...") });
+                const copied = await copySessionWithCwdRewrite(inv.rootPath, targetDir, sessionId);
+                if (copied) { resumeId = sessionId; }
+            }
+
+            projectStorage.push(newName, targetDir, INVESTIGATION_KIND);
+            projectStorage.save();
+            providerManager.refreshStorageTreeView();
+
+            const sessionName = path.basename(targetDir).replace(/\./g, "-");
+            const claudeCmd = resumeId
+                ? `claude --resume ${resumeId} --dangerously-skip-permissions`
+                : `claude --dangerously-skip-permissions`;
+            await run(
+                `tmux new-session -d -s ${shellQuote(sessionName)} -c ${shellQuote(targetDir)} bash -lic ${shellQuote(claudeCmd)} 2>/dev/null || true`,
+                targetDir
+            );
+
+            const choice = await window.showInformationMessage(
+                l10n.t("Forked \"{0}\" to \"{1}\".", inv.name, newName),
+                l10n.t("Open Investigation")
+            );
+            if (choice) {
+                commands.executeCommand("_projectManager.open", targetDir, newName);
+            }
+        } catch (error) {
+            window.showErrorMessage(l10n.t("Failed to fork investigation: {0}", error.message));
+        }
+    });
+}
+
 export function registerInvestigations(projectStorage: ProjectStorage, providerManager: Providers) {
     Container.context.subscriptions.push(
         commands.registerCommand("_projectManager.newInvestigation", () => newInvestigation(projectStorage, providerManager)),
         commands.registerCommand("_projectManager.openInvestigationTmux", (arg) => openInvestigationTmux(arg, projectStorage)),
+        commands.registerCommand("_projectManager.forkInvestigation", (arg) => forkInvestigation(arg, projectStorage, providerManager)),
         commands.registerCommand("_projectManager.promoteInvestigation", (arg) => promoteInvestigation(arg, projectStorage, providerManager)),
         commands.registerCommand("_projectManager.deleteInvestigation", (arg) => deleteInvestigation(arg, projectStorage, providerManager)),
     );
