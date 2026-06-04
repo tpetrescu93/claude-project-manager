@@ -13,7 +13,7 @@ This is a personal fork of the [VS Code Project Manager extension](https://githu
 
 ## Installation
 
-1. Download the `.vsix` from the [latest release](https://github.com/tpetrescu93/vscode-project-manager/releases/latest) and install via Extensions panel → `···` → Install from VSIX
+1. Download [`claude-project-manager.vsix`](https://github.com/tpetrescu93/claude-project-manager/releases/latest/download/claude-project-manager.vsix) and install via Extensions panel → `···` → Install from VSIX
 2. Required on PATH: `claude`, `tmux`, `gh`, `git`, `jq`, `rsync`, `bun`
 3. Add to VS Code settings: `"projectManager.git.baseFolders": ["~/projects"]` (or your repos folder)
 4. For Slack posting: save the two skill files to `~/.claude/skills/pr-slack/SKILL.md` and `~/.claude/skills/pr-slack-react/SKILL.md`
