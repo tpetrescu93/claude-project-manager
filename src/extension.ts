@@ -80,28 +80,36 @@ export async function activate(context: vscode.ExtensionContext) {
 
     registerWhatsNew();
 
-    // Auto-start tmux session if flagged by the previous host (workspace switch
-    // where no session existed). Clear the flag immediately so a reload doesn't
-    // re-trigger it. Wait for the window to become focused (workbench fully
-    // rendered) before creating the terminal — createTerminal + moveToEditor
-    // silently misbehave if the editor area isn't ready yet.
+    // VS Code restores sidebar focus on workspace reload. Defocus it on activation
+    // so the user lands in the editor group, not the project list.
+    // Auto-start tmux session if flagged by the previous host (no session existed).
     const autoStart = context.globalState.get<{ rootPath: string; name: string }>("autoStartTmux");
-    if (autoStart) {
-        context.globalState.update("autoStartTmux", undefined);
-        const fireAutoStart = () => vscode.commands.executeCommand("_projectManager.openTmuxSession", {
-            preview: { path: autoStart.rootPath, name: autoStart.name }
-        });
-        if (vscode.window.state.focused) {
-            fireAutoStart();
-        } else {
-            const disposable = vscode.window.onDidChangeWindowState(state => {
-                if (state.focused) {
-                    disposable.dispose();
-                    fireAutoStart();
-                }
+    if (autoStart) { context.globalState.update("autoStartTmux", undefined); }
+
+    const onActivationFocus = () => {
+        const existing = vscode.window.terminals.find(t => t.name.startsWith(TMUX_TERMINAL_PREFIX));
+        if (existing) {
+            existing.show();
+            vscode.commands.executeCommand("workbench.action.terminal.focus");
+        } else if (autoStart) {
+            vscode.commands.executeCommand("_projectManager.openTmuxSession", {
+                preview: { path: autoStart.rootPath, name: autoStart.name }
             });
-            context.subscriptions.push(disposable);
+        } else {
+            vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
         }
+    };
+
+    if (vscode.window.state.focused) {
+        onActivationFocus();
+    } else {
+        const disposable = vscode.window.onDidChangeWindowState(state => {
+            if (state.focused) {
+                disposable.dispose();
+                onActivationFocus();
+            }
+        });
+        context.subscriptions.push(disposable);
     }
 
     context.subscriptions.push(vscode.commands.registerCommand("_projectManager.openFolderWelcome", () => {
