@@ -10,10 +10,11 @@ export interface Project {
     tags: string[];   // the tags associated to the project
     enabled: boolean; // the project should be displayed in the project list
     profile: string;  // the profile to assign to the project
-    kind?: string;    // "investigation" for scratch investigation sessions; undefined for normal projects
+    kind?: string;     // "investigation" for scratch investigation sessions; undefined for normal projects
+    repoName?: string; // git repo name (e.g. "paydays-api"), used to display "repo · branch"
 }
 
-export function createProject(name: string, rootPath: string, kind?: string): Project {
+export function createProject(name: string, rootPath: string, kind?: string, repoName?: string): Project {
 
     const newProject: Project = {
         name,
@@ -22,7 +23,8 @@ export function createProject(name: string, rootPath: string, kind?: string): Pr
         tags: [],
         enabled: true,
         profile: "",
-        kind
+        kind,
+        repoName
     };
     return newProject;
 }

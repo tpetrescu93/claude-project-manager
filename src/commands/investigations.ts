@@ -142,7 +142,7 @@ async function promoteInvestigation(arg: InvestigationNode | string, projectStor
     const sourceName = path.basename(sourcePath);
     const nameInput = await window.showInputBox({
         prompt: l10n.t("New project name (folder + branch)"),
-        value: `${sourceName}-${slugify(inv.name)}`,
+        value: slugify(inv.name),
         validateInput: (value) => (!value || !value.trim()) ? l10n.t("Name is required") : undefined
     });
     if (!nameInput) { return; }

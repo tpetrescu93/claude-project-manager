@@ -19,6 +19,7 @@ interface ProjectInQuickPick {
     description: string;
     profile: string;
     kind?: string;
+    repoName?: string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
@@ -223,10 +224,9 @@ export class StorageProvider implements vscode.TreeDataProvider<ProjectNode | Ta
      *  vs normal project — based on its `kind`. */
     private buildNode(prj: ProjectInQuickPick): ProjectNode | InvestigationNode {
         const expandedPath = PathUtils.expandHomePath(prj.description);
+        const displayLabel = prj.repoName ? `${prj.repoName} · ${prj.label}` : prj.label;
         if (prj.kind === "investigation") {
-            const invNode = new InvestigationNode(prj.label, expandedPath, prj.profile);
-            // Register so the targeted poll refresh (refreshProjectNode) can update
-            // its Claude status icon in place, same as a normal ProjectNode.
+            const invNode = new InvestigationNode(displayLabel, expandedPath, prj.profile);
             this.nodesByPath.set(expandedPath, invNode);
             return invNode;
         }
@@ -236,7 +236,7 @@ export class StorageProvider implements vscode.TreeDataProvider<ProjectNode | Ta
         } else if (isRemotePath(prj.description)) {
             iconFavorites = "favorites-remote";
         }
-        const node = new ProjectNode(prj.label, vscode.TreeItemCollapsibleState.None,
+        const node = new ProjectNode(displayLabel, vscode.TreeItemCollapsibleState.None,
             iconFavorites, {
                 name: prj.label,
                 path: expandedPath

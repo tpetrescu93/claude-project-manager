@@ -13,6 +13,7 @@ export interface PendingProject {
     name: string;
     rootPath: string;
     kind?: string;
+    repoName?: string;
 }
 
 export function pendingDir(): string {

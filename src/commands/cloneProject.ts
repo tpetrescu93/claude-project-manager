@@ -14,6 +14,7 @@ import { ProjectNode } from "../sidebar/nodes";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { pendingDir, writePendingProject } from "./pendingProjectStore";
+import { parseRepoFromRemote } from "./githubBulkFetch";
 
 const execAsync = promisify(exec);
 
@@ -105,7 +106,18 @@ export async function performClone(
     // 5. Register in Project Manager
     const projectName = path.basename(targetDir);
     if (!projectStorage.exists(projectName)) {
-        projectStorage.push(projectName, targetDir);
+        // Derive repoName from the actual git remote (already fetched above) rather
+        // than the source folder name, so cloning a worktree gives "paydays-api"
+        // not "paydays-api-my-other-branch".
+        let repoName: string | undefined;
+        try {
+            const remote = await run("git remote get-url origin", targetDir);
+            repoName = parseRepoFromRemote(remote)?.repo;
+        } catch { /* no remote — leave undefined */ }
+        if (!repoName) { repoName = path.basename(sourcePath); }
+        // Store just the branch name, not the full folder name — the folder is
+        // "<repo>-<branch>" by convention, but the stored name should be just "<branch>".
+        projectStorage.push(branchName, targetDir, undefined, repoName);
         projectStorage.save();
     }
 
@@ -136,10 +148,10 @@ export function spawnDetachedClone(opts: {
             sessionId, sessionSrcDir, sessionDstDir,
             invSessionToKill, kind } = opts;
 
-    const projectName = path.basename(targetDir);
     const pendingFile = shellQuote(path.join(pendingDir(), `${pendingId}.json`));
     const logFile = shellQuote(path.join(os.homedir(), ".project-manager", "clone-logs", `${pendingId}.log`));
-    const pendingJson = JSON.stringify({ name: projectName, rootPath: targetDir, kind: kind ?? undefined });
+    const repoName = path.basename(sourcePath);
+    const pendingJson = JSON.stringify({ name: branchName, rootPath: targetDir, kind: kind ?? undefined, repoName });
 
     const sessionBlock = sessionId && sessionSrcDir && sessionDstDir ? `
 # 5. Copy Claude session (cwd-rewritten so --resume operates in the new folder)

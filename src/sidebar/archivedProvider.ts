@@ -27,7 +27,8 @@ export class ArchivedProvider implements vscode.TreeDataProvider<ArchivedProject
         const disabled = this.projectSource.disabled() || [];
         const nodes = disabled.map(p => {
             const path = PathUtils.expandHomePath(p.rootPath);
-            return new ArchivedProjectNode(p.name, vscode.TreeItemCollapsibleState.None, {
+            const displayLabel = p.repoName ? `${p.repoName} · ${p.name}` : p.name;
+            return new ArchivedProjectNode(displayLabel, vscode.TreeItemCollapsibleState.None, {
                 name: p.name,
                 path
             }, {

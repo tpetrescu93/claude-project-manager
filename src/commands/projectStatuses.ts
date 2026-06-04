@@ -312,6 +312,40 @@ async function updateClaudeStatuses(projectStorage: ProjectStorage, providerMana
     });
 }
 
+async function migrateRepoNames(projectStorage: ProjectStorage, providerManager: Providers): Promise<void> {
+    const projects = (projectStorage as any).projects as Array<{ name: string; rootPath: string; kind?: string; repoName?: string }>;
+    // Guard: skip entirely once all non-investigation projects have a repoName.
+    // This turns the migration into a true one-shot — after the first successful
+    // run it becomes a no-op with zero git spawns on activation.
+    const needsMigration = projects.filter(p => p.kind !== "investigation" && !p.repoName);
+    if (needsMigration.length === 0) { return; }
+
+    const results = await Promise.all(needsMigration.map(async p => {
+        try {
+            const remote = (await execAsync("git remote get-url origin", { cwd: p.rootPath, timeout: 4000 })).stdout.trim();
+            const parsed = parseRepoFromRemote(remote);
+            return parsed ? { rootPath: p.rootPath, repoName: parsed.repo } : null;
+        } catch { return null; }
+    }));
+
+    let changed = false;
+    for (const r of results) {
+        if (!r) { continue; }
+        const p = projects.find(p => p.rootPath === r.rootPath);
+        if (!p) { continue; }
+        p.repoName = r.repoName;
+        // Strip the "repoName-" prefix from the stored name so projects.json is
+        // the single source of truth — no display-time string manipulation needed.
+        const prefix = r.repoName + "-";
+        if (p.name.startsWith(prefix)) { p.name = p.name.slice(prefix.length); }
+        changed = true;
+    }
+    if (changed) {
+        projectStorage.save();
+        providerManager.refreshStorageTreeView();
+    }
+}
+
 function reconcilePendingProjects(projectStorage: ProjectStorage, providerManager: Providers): void {
     const errors = drainPendingErrors();
     for (const e of errors) {
@@ -324,7 +358,7 @@ function reconcilePendingProjects(projectStorage: ProjectStorage, providerManage
     let changed = false;
     for (const p of pending) {
         if (!projectStorage.exists(p.name)) {
-            projectStorage.push(p.name, p.rootPath, p.kind);
+            projectStorage.push(p.name, p.rootPath, p.kind, p.repoName);
             changed = true;
         }
     }
@@ -348,6 +382,10 @@ export function registerProjectStatuses(projectStorage: ProjectStorage, provider
     // Pick up any clone/fork/promote operations that completed while the ext
     // host was dead (workspace switch mid-run).
     reconcilePendingProjects(projectStorage, providerManager);
+
+    // One-shot migration: backfill repoName for any projects that don't have it yet.
+    // Runs in parallel, swallows errors (non-git / no remote = no repoName).
+    migrateRepoNames(projectStorage, providerManager).catch(() => { /* swallow */ });
 
     const gitTimer = setInterval(() => {
         updateGitStatuses(projectStorage, providerManager).catch(() => { /* swallow */ });

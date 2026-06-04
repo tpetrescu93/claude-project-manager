@@ -20,8 +20,8 @@ export class ProjectStorage {
         this.projects = [];
     }
 
-    public push(name: string, rootPath: string, kind?: string): void {
-        this.projects.push(createProject(name, rootPath, kind));
+    public push(name: string, rootPath: string, kind?: string, repoName?: string): void {
+        this.projects.push(createProject(name, rootPath, kind, repoName));
         return;
     }
 
@@ -149,7 +149,8 @@ export class ProjectStorage {
                     tags: project.tags,
                     enabled: project.enabled,
                     profile: project.profile,
-                    kind: project.kind
+                    kind: project.kind,
+                    repoName: project.repoName
                 }));
             }
 
@@ -171,7 +172,8 @@ export class ProjectStorage {
                 label: item.name,
                 description: item.rootPath,
                 profile: item.profile,
-                kind: item.kind
+                kind: item.kind,
+                repoName: item.repoName
             };
         });
         return newItems;
@@ -213,7 +215,8 @@ export class ProjectStorage {
                 label: item.name,
                 description: item.rootPath,
                 profile: item.profile,
-                kind: item.kind
+                kind: item.kind,
+                repoName: item.repoName
             };
         });
         return newItems;
@@ -230,7 +233,8 @@ export class ProjectStorage {
                 label: item.name,
                 description: item.rootPath,
                 profile: item.profile,
-                kind: item.kind
+                kind: item.kind,
+                repoName: item.repoName
             };
         });
         return newItems;
