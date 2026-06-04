@@ -151,7 +151,7 @@ Not implemented. Was scoped (branch name, dirty count, ahead/behind) but deferre
 `TreeDragAndDropController` implementation. Within Favorites: persists the new order to `projects.json`. Within Git: persists a custom order to `gitItemOrder` in `globalState`.
 
 ### Clone-to-new-branch — ✅ DONE
-Right-click a project → "Clone to New Project". Input box for branch name. Implementation in TypeScript (Option B from earlier spec):
+Right-click a project → "Clone to New Project". Input box for branch name. Steps:
 1. `rsync -a --exclude='node_modules/' --exclude='.venv/'` to a sibling directory `<src>-<branch>`.
 2. Clean git locks, fetch, checkout default branch (auto-detected from `origin/HEAD`), reset hard, then `git checkout -b <branch>`.
 3. If `yarn.lock` or `package-lock.json` exists → `bun install && rm -f bun.lock bun.lockb`.
@@ -159,13 +159,23 @@ Right-click a project → "Clone to New Project". Input box for branch name. Imp
 
 Total runtime ~10–15s typical for a paydays-api clone.
 
+**Runs in the background — survives workspace switches.** All three heavy operations (clone, fork, promote) previously ran in-process via `await` chains that died when a workspace switch reloaded the extension host, silently abandoning the operation mid-rsync/git/bun. Now each operation:
+1. Gathers inputs in-process (input boxes, session ID snapshot).
+2. Spawns a **detached bash script** (built inline as a string in TypeScript, no file to distribute) with `{ detached: true }` + `child.unref()` — outlives the ext host.
+3. Returns immediately with a "Running in background" toast.
+4. On success the script writes `~/.project-manager/pending-projects/<id>.json` with `{name, rootPath}`. On failure it writes `~/.project-manager/pending-projects/<id>.error` with the error message + log path (`~/.project-manager/clone-logs/<id>.log`).
+5. The extension **reconciles** on activation (covers the workspace-switch case) and via `fs.watch` on the pending dir (instant on macOS/FSEvents) + a 5s interval fallback (Linux/Windows where `fs.watch` is unreliable). Success files add the project to `projects.json`; error files surface a toast with a "Show Log" button.
+
+The pending file approach (rather than writing directly to `projects.json`) is deliberate: the extension rewrites `projects.json` wholesale on every save and only reads it at load — an external writer would race it and the result wouldn't be seen live.
+
 ### Fork Project + Claude Session — ✅ DONE
 Right-click a project that has a Claude session → "Fork Project + Claude Session...". Clones it to a new folder/branch (reusing the clone flow) AND carries the Claude conversation across so a new agent resumes where the old one left off, then diverges.
 
 - **Name prompt** is prefilled with the source project's name, pre-selected for editing; the edited value becomes both the new folder name and the git branch (matches the folder≈branch convention). Blocks if left identical to the source.
 - **Session copy**: finds the source's newest transcript in `~/.claude/projects/<encoded-source-cwd>/`, copies it (and the subagent dir, recursively, best-effort, skipping non-regular files like IPC sockets) into `~/.claude/projects/<encoded-new-cwd>/`, **rewriting every entry's `cwd`** to the new path via `jq` — same mechanism as the `move` skill. Without the rewrite, `--resume` stays pinned to the source folder.
-- **Resume**: starts `claude --resume <session-id>` in a **detached** tmux session (`tmux new-session -d … bash -lic 'claude --resume …'`). Detached on purpose — `window.createTerminal` would otherwise open a terminal tab in the *current* (unrelated) workspace. Switching to the fork and "Open Tmux Session" attaches to the already-running resumed session.
+- **Resume**: the detached bash script starts `claude --resume <session-id>` in a detached tmux session after the clone completes. Switching to the fork and "Open Tmux Session" attaches to the already-running resumed session.
 - Toast offers an "Open Project" button to switch immediately, or you ignore it and keep working where you are.
+- The operation runs in the background (see Clone section) — safe to switch workspaces while it runs.
 
 Resolved the spec's open questions: `--resume` keys by session ID (`-r, --resume [value]` = "Resume a conversation by session ID"); the encoded dir is `rootPath.replace(/\//g, "-")` (leading dash kept); the fork *copies* (independent divergence, not shared); only `cwd` is rewritten (embedded paths in message history are left as historical record). `performClone` was factored out of `cloneProject.ts` for reuse.
 
@@ -216,7 +226,7 @@ The 6s polling loop already detects `merged` transitions. When a project flips t
 
 A **Remove Slack Link** right-click command (`deleteSlackPost`) clears a stored permalink manually — reverting the "posted" overlay and stopping the merge reaction for that PR.
 
-The detached post writes full output to a per-project log under `~/.project-manager/slack-logs/`; the merge-react invocation logs to the `Project Manager: Slack React` output channel.
+The detached post writes full output to a per-project log under `~/.project-manager/slack-logs/`. If the script exits without producing a `SLACK_POST:` permalink (failed claude run, skill not found, auth issue), it writes an error file to `~/.project-manager/pending-projects/slack-<id>.error` — the same reconciler that handles clone/fork/promote errors picks it up and shows a "Show Log" toast. The merge-react invocation logs to the `Project Manager: Slack React` output channel.
 
 **Why this shape:** the extension never handles Slack auth. Auth lives in Claude's MCP setup, which the user already has. Trade-off: each post/react is a 5–15s Claude round-trip vs an instant API call. Acceptable for a few-times-a-day workflow.
 
@@ -273,7 +283,9 @@ Subsequent invocations for a project whose `Tmux:` terminal already exists call 
 
 The command does NOT auto-start `claude` (or anything else). On a *fresh* tmux session the user lands at a bash prompt and types whatever they want (`claude`, a REPL, etc.). On *subsequent* opens of the same project, attaches to the persistent tmux session that survives VS Code restarts, workspace switches, and even VS Code crashes (it's its own OS process).
 
-**Persistence across workspace switches.** Requires `terminal.integrated.enablePersistentSessions = true` in user settings. VS Code then scopes terminals per-workspace and restores them on return. No explicit auto-launch on activation — the previously-saved editor tab simply reappears (or no tab appears on a fresh workspace).
+**Auto-start on first open.** When `_projectManager.open` is called, the extension runs `tmux has-session -t "=<name>"` before the workspace switch. If no session exists, it writes a one-shot `{ rootPath, name }` flag to `globalState["autoStartTmux"]`. On activation in the new workspace, if that flag is set, it is immediately cleared and `openTmuxSession` is fired — either immediately if `window.state.focused` is already true, or deferred via `window.onDidChangeWindowState` until the window becomes focused (ensures the workbench is fully rendered before `createTerminal` + `moveToEditor` run). If a session already exists, no flag is set and the existing session is left alone.
+
+**Persistence across workspace switches.** Requires `terminal.integrated.enablePersistentSessions = true` in user settings. VS Code then scopes terminals per-workspace and restores them on return.
 
 Auto-launch on workspace activation was removed in favour of per-workspace restoration. Earlier iterations raced with VS Code's restoration logic and produced duplicate terminals or unwanted default-bash shells on fresh workspaces; persistent sessions + editor-tab placement sidesteps both.
 
@@ -426,17 +438,19 @@ Sources: [Use the Agents window (Preview)](https://code.visualstudio.com/docs/co
 
 VS Code can't install extensions from a git URL. Options:
 
-1. **Build and install a .vsix** (current workflow):
+1. **Download the latest release** (easiest): grab `claude-project-manager.vsix` from the [latest release](https://github.com/tpetrescu93/claude-project-manager/releases/latest/download/claude-project-manager.vsix) and install via Extensions panel → `···` → Install from VSIX. A **GitHub Action** rebuilds and republishes the `.vsix` on every push to `master` — the download URL is stable (`releases/latest/download/claude-project-manager.vsix`), always points to the newest build. The release title shows the short SHA + CI run number; the body links to the exact commit and CI run for traceability.
+
+2. **Build and install locally**:
    ```
    npm run webpack
-   npx vsce package --out /tmp/project-manager-fork.vsix
-   code --install-extension /tmp/project-manager-fork.vsix --force
+   npx vsce package --out /tmp/claude-project-manager.vsix
+   code --install-extension /tmp/claude-project-manager.vsix --force
    ```
    Reload the window for the new code to take effect — `--force` reinstall doesn't auto-reload running extensions.
 
-2. **Symlink during development**: `ln -s <fork-dir> ~/.vscode/extensions/<publisher>.<name>-<version>`. Requires `npm run compile` after TypeScript changes + window reload.
+3. **Symlink during development**: `ln -s <fork-dir> ~/.vscode/extensions/<publisher>.<name>-<version>`. Requires `npm run compile` after TypeScript changes + window reload.
 
-3. **Extension Development Host (F5)**: launches a second VS Code window with the extension loaded from source. Standard dev loop.
+4. **Extension Development Host (F5)**: launches a second VS Code window with the extension loaded from source. Standard dev loop.
 
 ### Skills (out-of-repo dependencies)
 
