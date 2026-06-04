@@ -10,7 +10,7 @@ import * as path from "path";
 import { Container } from "../core/container";
 import { ProjectNode } from "../sidebar/nodes";
 import { getPrUrlForPath } from "./projectStatuses";
-import { getSlackPost, deleteSlackPost, slackPostFilePath } from "./slackPostStore";
+import { getSlackPost, setSlackPost, deleteSlackPost, slackPostFilePath } from "./slackPostStore";
 import { projectSessionDir, encodeProjectDir } from "./claudeSessions";
 import { pendingDir } from "./pendingProjectStore";
 
@@ -83,6 +83,19 @@ async function postPrToSlack(node: ProjectNode) {
     );
 }
 
+async function attachSlackPost(node: ProjectNode) {
+    const rootPath: string = node?.preview?.path ?? node?.command?.arguments?.[ 0 ];
+    if (!rootPath) { return; }
+    const permalink = await window.showInputBox({
+        prompt: l10n.t("Paste the Slack message permalink"),
+        placeHolder: "https://wagestream.slack.com/archives/C.../p...",
+        validateInput: (v) => (v && /^https?:\/\//.test(v.trim())) ? undefined : l10n.t("Must be a valid URL"),
+    });
+    if (!permalink || !permalink.trim()) { return; }
+    setSlackPost(rootPath, permalink.trim());
+    window.showInformationMessage(l10n.t("Slack link attached. The row will update on the next status poll."));
+}
+
 async function removeSlackPost(node: ProjectNode) {
     const rootPath: string = node?.preview?.path ?? node?.command?.arguments?.[ 0 ];
     if (!rootPath) { return; }
@@ -100,6 +113,7 @@ async function removeSlackPost(node: ProjectNode) {
 export function registerPostPrToSlack() {
     Container.context.subscriptions.push(
         commands.registerCommand("_projectManager.postPrToSlack", (node: ProjectNode) => postPrToSlack(node)),
+        commands.registerCommand("_projectManager.attachSlackPost", (node: ProjectNode) => attachSlackPost(node)),
         commands.registerCommand("_projectManager.removeSlackPost", (node: ProjectNode) => removeSlackPost(node))
     );
 }

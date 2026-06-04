@@ -287,6 +287,10 @@
 				"title": "%projectManager.commands.removeSlackPost.title%"
 			},
 			{
+				"command": "_projectManager.attachSlackPost",
+				"title": "%projectManager.commands.attachSlackPost.title%"
+			},
+			{
 				"command": "_projectManager.openTmuxSession",
 				"title": "%projectManager.commands.openTmuxSession.title%",
 				"icon": "$(terminal)"
@@ -460,6 +464,10 @@
 				},
 				{
 					"command": "_projectManager.postPrToSlack",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.attachSlackPost",
 					"when": "false"
 				},
 				{
@@ -922,6 +930,11 @@
 				{
 					"command": "_projectManager.forkProject",
 					"when": "view =~ /projectsExplorer(Favorites|Git)/ && viewItem =~ /^ProjectNodeKind/",
+					"group": "favorites"
+				},
+				{
+					"command": "_projectManager.attachSlackPost",
+					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
 					"group": "favorites"
 				},
 				{
