@@ -23,7 +23,7 @@ jobs:
         run: npm run webpack
 
       - name: Package
-        run: npx vsce package --out project-manager-fork.vsix
+        run: npx vsce package --out claude-project-manager.vsix
 
       - name: Release
         uses: softprops/action-gh-release@v2
@@ -31,5 +31,5 @@ jobs:
           tag_name: latest
           name: Latest
           body: "Auto-built from ${{ github.sha }}"
-          files: project-manager-fork.vsix
+          files: claude-project-manager.vsix
           make_latest: true
