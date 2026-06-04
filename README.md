@@ -1,5 +1,7 @@
 # Project Manager Fork — VS Code extension for Claude Code workflows
 
+![Screenshot](images/screenshot.png)
+
 This is a personal fork of the [VS Code Project Manager extension](https://github.com/alefragnani/vscode-project-manager) that integrates Claude Code, tmux, and GitHub status into the project switcher.
 
 ## Features
