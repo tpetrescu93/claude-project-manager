@@ -5,7 +5,11 @@
 
 import fs = require("fs");
 import path = require("path");
+import { exec } from "child_process";
+import { promisify } from "util";
 import * as vscode from "vscode";
+
+const execAsync = promisify(exec);
 
 import { Locators } from "./autodetect/locators";
 import { ProjectStorage } from "./storage/storage";
@@ -76,6 +80,30 @@ export async function activate(context: vscode.ExtensionContext) {
 
     registerWhatsNew();
 
+    // Auto-start tmux session if flagged by the previous host (workspace switch
+    // where no session existed). Clear the flag immediately so a reload doesn't
+    // re-trigger it. Wait for the window to become focused (workbench fully
+    // rendered) before creating the terminal — createTerminal + moveToEditor
+    // silently misbehave if the editor area isn't ready yet.
+    const autoStart = context.globalState.get<{ rootPath: string; name: string }>("autoStartTmux");
+    if (autoStart) {
+        context.globalState.update("autoStartTmux", undefined);
+        const fireAutoStart = () => vscode.commands.executeCommand("_projectManager.openTmuxSession", {
+            preview: { path: autoStart.rootPath, name: autoStart.name }
+        });
+        if (vscode.window.state.focused) {
+            fireAutoStart();
+        } else {
+            const disposable = vscode.window.onDidChangeWindowState(state => {
+                if (state.focused) {
+                    disposable.dispose();
+                    fireAutoStart();
+                }
+            });
+            context.subscriptions.push(disposable);
+        }
+    }
+
     context.subscriptions.push(vscode.commands.registerCommand("_projectManager.openFolderWelcome", () => {
         const openFolderCommand = isWindows || isMacOS ? "workbench.action.files.openFolder" : "workbench.action.files.openFileFolder";
         vscode.commands.executeCommand(openFolderCommand);
@@ -97,6 +125,17 @@ export async function activate(context: vscode.ExtensionContext) {
         const uri = buildProjectUri(projectPath);
         if (!await canSwitchOnActiveWindow(CommandLocation.SideBar)) {
             return;
+        }
+        // Check if a tmux session already exists for this project. If not, set a
+        // one-shot flag so the new extension host (post-reload) auto-starts one.
+        // Done before openFolder since the reload kills this host immediately.
+        const sessionName = path.basename(projectPath).replace(/\./g, "-");
+        try {
+            await execAsync(`tmux has-session -t "=${sessionName}" 2>/dev/null`, { timeout: 3000 });
+            // Session exists — no auto-start needed.
+        } catch {
+            // No session — flag for auto-start on activation.
+            context.globalState.update("autoStartTmux", { rootPath: projectPath, name: projectName });
         }
         vscode.commands.executeCommand("vscode.openFolder", uri, { forceProfile: profile , forceNewWindow: false } )
             .then(
