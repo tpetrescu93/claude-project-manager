@@ -12,6 +12,7 @@ import { ProjectNode } from "../sidebar/nodes";
 import { getPrUrlForPath } from "./projectStatuses";
 import { getSlackPost, deleteSlackPost, slackPostFilePath } from "./slackPostStore";
 import { projectSessionDir, encodeProjectDir } from "./claudeSessions";
+import { pendingDir } from "./pendingProjectStore";
 
 const POST_PROMPT = "Use the pr-slack skill to post the current branch's PR to Slack. Do not ask for confirmation.";
 
@@ -29,20 +30,22 @@ function shellQuote(s: string): string {
  */
 function buildPostScript(rootPath: string): string {
     const store = shellQuote(slackPostFilePath(rootPath));
-    const logFile = shellQuote(path.join(os.homedir(), ".project-manager", "slack-logs", `${encodeProjectDir(rootPath)}.log`));
+    const logAbsolute = path.join(os.homedir(), ".project-manager", "slack-logs", `${encodeProjectDir(rootPath)}.log`);
+    const logFile = shellQuote(logAbsolute);
+    const pendingId = `slack-${encodeProjectDir(rootPath).slice(-20)}`;
+    const errorFile = shellQuote(path.join(pendingDir(), `${pendingId}.error`));
+    const errorJson = shellQuote(JSON.stringify({ id: pendingId, message: "Failed to post PR to Slack — no permalink found. Check the log for details.", logFile: logAbsolute }));
     const sdir = shellQuote(projectSessionDir(rootPath));
     const cwd = shellQuote(rootPath);
     const prompt = shellQuote(POST_PROMPT);
     return [
-        `mkdir -p "$(dirname ${store})" "$(dirname ${logFile})" 2>/dev/null`,
+        `mkdir -p "$(dirname ${store})" "$(dirname ${logFile})" "$(dirname ${errorFile})" 2>/dev/null`,
         `sdir=${sdir}`,
-        // Snapshot existing transcripts (pipe-delimited) before the run.
         `before="|"; for f in "$sdir"/*.jsonl; do [ -e "$f" ] && before="$before$f|"; done`,
         `out=$(cd ${cwd} && claude -p ${prompt} --dangerously-skip-permissions 2>&1)`,
         `printf '%s\\n' "$out" > ${logFile}`,
         `url=$(printf '%s\\n' "$out" | grep -oE '^SLACK_POST:[[:space:]]*https?://[^[:space:]]+' | head -1 | sed -E 's/^SLACK_POST:[[:space:]]*//')`,
-        `[ -n "$url" ] && printf '%s' "$url" > ${store}`,
-        // Delete any transcript that appeared since the snapshot (+ its subagent dir).
+        `if [ -n "$url" ]; then printf '%s' "$url" > ${store}; else printf '%s' ${errorJson} > ${errorFile}; fi`,
         `for f in "$sdir"/*.jsonl; do [ -e "$f" ] || continue; case "$before" in *"|$f|"*) ;; *) rm -f "$f"; id=$(basename "$f" .jsonl); rm -rf "$sdir/$id";; esac; done`,
     ].join("\n");
 }

@@ -11,8 +11,8 @@ import { Container } from "../core/container";
 import { ProjectStorage } from "../storage/storage";
 import { Providers } from "../sidebar/providers";
 import { InvestigationNode } from "../sidebar/nodes";
-import { run, performClone } from "./cloneProject";
-import { copySessionWithCwdRewrite, latestSessionId } from "./forkProject";
+import { run, spawnDetachedClone } from "./cloneProject";
+import { latestSessionId, encodeProjectDir, copySessionWithCwdRewrite } from "./forkProject";
 import { getPinnedGitRepos } from "./gitPinning";
 
 const INVESTIGATION_KIND = "investigation";
@@ -154,50 +154,30 @@ async function promoteInvestigation(arg: InvestigationNode | string, projectStor
     const newName = nameInput.trim();
 
     const sessionId = latestSessionId(inv.rootPath);
+    const targetDir = path.join(path.dirname(sourcePath), newName);
+    const pendingId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+    const claudeProjectsDir = path.join(os.homedir(), ".claude", "projects");
+    const sessionSrcDir = sessionId ? path.join(claudeProjectsDir, encodeProjectDir(inv.rootPath)) : undefined;
+    const sessionDstDir = sessionId ? path.join(claudeProjectsDir, encodeProjectDir(targetDir)) : undefined;
+    const invSessionName = path.basename(inv.rootPath).replace(/\./g, "-");
 
-    await window.withProgress({
-        location: ProgressLocation.Notification,
-        title: l10n.t("Promoting investigation to project..."),
-        cancellable: false
-    }, async (progress) => {
-        try {
-            const targetDir = await performClone(sourcePath, newName, projectStorage, progress, newName);
+    // Remove the investigation entry immediately — the detached script handles
+    // the folder cleanup. Worst case (clone fails), the folder remains on disk
+    // but the entry is gone; user can re-add manually.
+    try { await run(`tmux kill-session -t ${shellQuote("=" + invSessionName)} 2>/dev/null`, PROJECTS_BASE); } catch { /* */ }
+    try { fs.rmSync(inv.rootPath, { recursive: true, force: true }); } catch { /* */ }
+    projectStorage.pop(inv.name);
+    projectStorage.save();
+    providerManager.refreshStorageTreeView();
 
-            let resumeId: string | undefined;
-            if (sessionId) {
-                progress.report({ message: l10n.t("Carrying Claude session...") });
-                const copied = await copySessionWithCwdRewrite(inv.rootPath, targetDir, sessionId);
-                if (copied) { resumeId = sessionId; }
-            }
-
-            const sessionName = path.basename(targetDir).replace(/\./g, "-");
-            const claudeCmd = resumeId
-                ? `claude --resume ${resumeId} --dangerously-skip-permissions`
-                : `claude --dangerously-skip-permissions`;
-            await run(
-                `tmux new-session -d -s ${shellQuote(sessionName)} -c ${shellQuote(targetDir)} bash -lic ${shellQuote(claudeCmd)} 2>/dev/null || true`,
-                targetDir
-            );
-
-            // Remove the scratch investigation now that it's a real project.
-            const invSession = path.basename(inv.rootPath).replace(/\./g, "-");
-            try { await run(`tmux kill-session -t ${shellQuote("=" + invSession)} 2>/dev/null`, PROJECTS_BASE); } catch { /* */ }
-            try { fs.rmSync(inv.rootPath, { recursive: true, force: true }); } catch { /* */ }
-            projectStorage.pop(inv.name);
-            projectStorage.save();
-            providerManager.refreshStorageTreeView();
-
-            const choice = await window.showInformationMessage(
-                l10n.t("Promoted \"{0}\" to {1}.", inv.name, path.basename(targetDir)),
-                l10n.t("Open Project")
-            );
-            if (choice) {
-                commands.executeCommand("_projectManager.open", targetDir, path.basename(targetDir));
-            }
-        } catch (error) {
-            window.showErrorMessage(l10n.t("Failed to promote investigation: {0}", error.message));
-        }
+    spawnDetachedClone({
+        sourcePath, targetDir, branchName: newName, pendingId,
+        sessionId: sessionId ?? undefined,
+        sessionSrcDir, sessionDstDir,
     });
+    window.showInformationMessage(
+        l10n.t("Promoting in the background — \"{0}\" will appear in Projects when done.", newName)
+    );
 }
 
 /**

@@ -6,11 +6,11 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { commands, l10n, ProgressLocation, window } from "vscode";
+import { commands, l10n, window } from "vscode";
 import { Container } from "../core/container";
 import { ProjectStorage } from "../storage/storage";
 import { ProjectNode } from "../sidebar/nodes";
-import { performClone, validateBranchName, run } from "./cloneProject";
+import { spawnDetachedClone, validateBranchName, run } from "./cloneProject";
 
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), ".claude", "projects");
 
@@ -19,7 +19,7 @@ const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), ".claude", "projects");
  * Leading slash becomes a leading dash (kept, not stripped) — matches the real
  * on-disk directory names.
  */
-function encodeProjectDir(rootPath: string): string {
+export function encodeProjectDir(rootPath: string): string {
     return rootPath.replace(/\//g, "-");
 }
 
@@ -161,46 +161,18 @@ async function forkProject(node: ProjectNode, projectStorage: ProjectStorage) {
     if (!input) { return; }
     const newName = input.trim();
 
-    await window.withProgress({
-        location: ProgressLocation.Notification,
-        title: l10n.t("Forking project + Claude session..."),
-        cancellable: false
-    }, async (progress) => {
-        try {
-            // newName is both the new folder name and the new git branch.
-            const targetDir = await performClone(sourcePath, newName, projectStorage, progress, newName);
+    const targetDir = path.join(path.dirname(sourcePath), newName);
+    const pendingId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+    const sessionSrcDir = path.join(CLAUDE_PROJECTS_DIR, encodeProjectDir(sourcePath));
+    const sessionDstDir = path.join(CLAUDE_PROJECTS_DIR, encodeProjectDir(targetDir));
 
-            progress.report({ message: l10n.t("Copying Claude session...") });
-            const copied = await copySessionWithCwdRewrite(sourcePath, targetDir, sessionId);
-            if (!copied) {
-                window.showWarningMessage(l10n.t("Project forked, but the Claude session transcript could not be copied."));
-                return;
-            }
-
-            // Start the resumed Claude in a DETACHED tmux session — no VS Code
-            // terminal in the current (unrelated) workspace. When the user later
-            // switches to the forked project and runs "Open Tmux Session", it
-            // `tmux attach`es to this already-running, resumed session.
-            // `bash -lic` as the session command loads the profile so claude is on PATH.
-            progress.report({ message: l10n.t("Starting resumed Claude session...") });
-            const sessionName = path.basename(targetDir).replace(/\./g, "-");
-            const resumeCmd = `claude --resume ${sessionId} --dangerously-skip-permissions`;
-            await run(
-                `tmux new-session -d -s ${shellQuote(sessionName)} -c ${shellQuote(targetDir)} bash -lic ${shellQuote(resumeCmd)} 2>/dev/null || true`,
-                targetDir
-            );
-
-            const choice = await window.showInformationMessage(
-                l10n.t("Forked to {0} — Claude is resuming in a background tmux session.", path.basename(targetDir)),
-                l10n.t("Open Project")
-            );
-            if (choice) {
-                commands.executeCommand("_projectManager.open", targetDir, path.basename(targetDir));
-            }
-        } catch (error) {
-            window.showErrorMessage(l10n.t("Failed to fork project: {0}", error.message));
-        }
+    spawnDetachedClone({
+        sourcePath, targetDir, branchName: newName, pendingId,
+        sessionId, sessionSrcDir, sessionDstDir,
     });
+    window.showInformationMessage(
+        l10n.t("Forking in the background — \"{0}\" will appear in Projects when done.", newName)
+    );
 }
 
 export function registerForkProject(projectStorage: ProjectStorage) {

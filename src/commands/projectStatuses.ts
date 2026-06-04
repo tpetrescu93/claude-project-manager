@@ -3,16 +3,18 @@
 *  Licensed under the GPLv3 License. See License.md in the project root for license information.
 *--------------------------------------------------------------------------------------------*/
 
+import * as fs from "fs";
 import * as path from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { EventEmitter, workspace } from "vscode";
+import { env, EventEmitter, Uri, window as vscodeWindow, workspace } from "vscode";
 import { Container } from "../core/container";
 import { ProjectStorage } from "../storage/storage";
 import { Providers } from "../sidebar/providers";
 import { reactToMergedPr } from "./reactToMergedPr";
 import { bulkFetchPrStatuses, BulkFetchInput, parseRepoFromRemote } from "./githubBulkFetch";
 import { getSlackPost } from "./slackPostStore";
+import { drainPendingProjects, drainPendingErrors, pendingDir } from "./pendingProjectStore";
 
 const execAsync = promisify(exec);
 
@@ -315,6 +317,28 @@ async function updateClaudeStatuses(projectStorage: ProjectStorage, providerMana
     });
 }
 
+function reconcilePendingProjects(projectStorage: ProjectStorage, providerManager: Providers): void {
+    const errors = drainPendingErrors();
+    for (const e of errors) {
+        vscodeWindow.showErrorMessage(`Background operation failed: ${e.message}`, "Show Log")
+            .then((choice) => { if (choice) { env.openExternal(Uri.file(e.logFile)); } });
+    }
+
+    const pending = drainPendingProjects();
+    if (pending.length === 0) { return; }
+    let changed = false;
+    for (const p of pending) {
+        if (!projectStorage.exists(p.name)) {
+            projectStorage.push(p.name, p.rootPath, p.kind);
+            changed = true;
+        }
+    }
+    if (changed) {
+        projectStorage.save();
+        providerManager.refreshStorageTreeView();
+    }
+}
+
 export function registerProjectStatuses(projectStorage: ProjectStorage, providerManager: Providers) {
     // Restore PR status / URL caches from disk so icons render immediately on activation
     loadCachesFromGlobalState();
@@ -326,6 +350,10 @@ export function registerProjectStatuses(projectStorage: ProjectStorage, provider
         providerManager.refreshStorageTreeView();
     }
 
+    // Pick up any clone/fork/promote operations that completed while the ext
+    // host was dead (workspace switch mid-run).
+    reconcilePendingProjects(projectStorage, providerManager);
+
     const gitTimer = setInterval(() => {
         updateGitStatuses(projectStorage, providerManager).catch(() => { /* swallow */ });
     }, GIT_INTERVAL_MS);
@@ -333,6 +361,22 @@ export function registerProjectStatuses(projectStorage: ProjectStorage, provider
     const claudeTimer = setInterval(() => {
         updateClaudeStatuses(projectStorage, providerManager).catch(() => { /* swallow */ });
     }, CLAUDE_INTERVAL_MS);
+
+    // Poll for pending projects every 5s as a fallback for platforms where
+    // fs.watch is unreliable (Linux inotify limits, network drives, Windows).
+    const pendingTimer = setInterval(() => {
+        reconcilePendingProjects(projectStorage, providerManager);
+    }, 5_000);
+
+    // fs.watch gives instant feedback on macOS (FSEvents) and most Linux setups.
+    // Errors/unavailability are swallowed — the interval is the safety net.
+    let watcher: fs.FSWatcher | undefined;
+    try {
+        fs.mkdirSync(pendingDir(), { recursive: true });
+        watcher = fs.watch(pendingDir(), () => {
+            reconcilePendingProjects(projectStorage, providerManager);
+        });
+    } catch { /* fs.watch unavailable — interval covers it */ }
 
     // Run once on activation
     updateGitStatuses(projectStorage, providerManager).catch(() => { /* swallow */ });
@@ -342,6 +386,8 @@ export function registerProjectStatuses(projectStorage: ProjectStorage, provider
         dispose: () => {
             clearInterval(gitTimer);
             clearInterval(claudeTimer);
+            clearInterval(pendingTimer);
+            watcher?.close();
         }
     });
 }
