@@ -134,7 +134,15 @@ git reset --hard "origin/$defaultBranch"
 # 3. Create new branch
 git checkout -b ${shellQuote(branchName)}
 
-# 3. bun install if JS lockfile present
+# 4. .venv: copy symlink if source has one, otherwise symlink the real dir
+src_venv=${shellQuote(sourcePath)}/.venv
+if [ -L "$src_venv" ]; then
+    cp -P "$src_venv" .venv
+elif [ -d "$src_venv" ]; then
+    ln -s "$src_venv" .venv
+fi
+
+# 5. bun install if JS lockfile present
 if [ -f yarn.lock ] || [ -f package-lock.json ]; then
     bun install && rm -f bun.lock bun.lockb || true
 fi
