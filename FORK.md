@@ -245,7 +245,6 @@ The detached post writes full output to a per-project log under `~/.project-mana
 ## Sidebar UI polish
 
 - **Hidden tag UI** — `View as Tags`, `View as List`, `Filter by Tag`, `Edit Tags` are hidden across the view title, `…` submenu, right-click menu, and command palette via `when: false`. Underlying storage and providers untouched.
-- **Git section first-expand pre-warm** — `deduplicateByRemote` calls `execSync("git remote get-url origin")` synchronously for every project to group repos. With ~39 projects this took ~1s on first expand (cold cache). Fixed by running the remote URL fetches in parallel with `execAsync` inside `showTreeView()` for the Git provider before `getChildren()` can fire, storing results in an in-memory cache backed by `globalState`. Subsequent expands in the same session are instant cache hits.
 - **Git section starts collapsed by default** — `visibility: "collapsed"` on `projectsExplorerGit`. Originally dropped (so it expanded), but the resulting default panel height was awkward and there's no extension API for content-fit sizing, so collapsing is the lesser evil. The workbench remembers expand/collapse per workspace, so this only affects fresh layouts.
 - **Click-to-switch on Git section** — dropped the `isGit ? undefined :` guard that previously made Git rows unclickable. Now click = switch workspace, same as Favorites.
 - **Inline button order** — explicit `inline@1` / `inline@2` ordering on Favorites rows so Slack icon is first, Open PR icon is last.
