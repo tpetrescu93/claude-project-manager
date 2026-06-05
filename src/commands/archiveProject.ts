@@ -47,7 +47,7 @@ async function archiveProject(node: ProjectNode, projectStorage: ProjectStorage,
 }
 
 async function restoreProject(node: ArchivedProjectNode, projectStorage: ProjectStorage, providerManager: Providers) {
-    const projectName = node.label as string;
+    const projectName = node.preview.name;
 
     projectStorage.toggleEnabled(projectName);
     projectStorage.save();
@@ -57,7 +57,7 @@ async function restoreProject(node: ArchivedProjectNode, projectStorage: Project
 }
 
 async function deleteArchivedProject(node: ArchivedProjectNode, projectStorage: ProjectStorage, providerManager: Providers) {
-    const projectName = node.label as string;
+    const projectName = node.preview.name;
     const projectPath = node.preview.path;
 
     if (isProjectOpenInCurrentWindow(projectPath)) {

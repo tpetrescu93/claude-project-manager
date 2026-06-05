@@ -4,13 +4,16 @@
 *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from "vscode";
-import { execSync } from "child_process";
+import { execSync, exec } from "child_process";
+import { promisify } from "util";
 import { AutodetectedProjectInfo } from "../autodetect/autodetectedProjectInfo";
 import { CustomProjectLocator } from "../autodetect/abstractLocator";
 import { ProjectNode } from "./nodes";
 import { Container } from "../core/container";
 import { addParentFolderToDuplicates } from "../utils/path";
 import { getPinnedGitRepos, isGitRepoPinned, isShowingPinnedOnly } from "../commands/gitPinning";
+
+const execAsync = promisify(exec);
 
 const REMOTE_URL_CACHE_KEY = "gitRemoteUrlCache";
 let remoteUrlCache: Record<string, string> | undefined;
@@ -24,6 +27,24 @@ function loadRemoteUrlCache(): Record<string, string> {
 
 function persistRemoteUrlCache(): void {
     Container.context.globalState.update(REMOTE_URL_CACHE_KEY, remoteUrlCache);
+}
+
+/**
+ * Pre-warm the remote URL cache for all projects in parallel so the first
+ * expand of the Git section hits the cache instead of firing 39 synchronous
+ * execSync calls in a row. Called on activation, runs in the background.
+ */
+export async function prewarmRemoteUrlCache(projects: AutodetectedProjectInfo[]): Promise<void> {
+    const cache = loadRemoteUrlCache();
+    const missing = projects.filter(p => !cache[p.fullPath]);
+    if (missing.length === 0) { return; }
+    await Promise.all(missing.map(async p => {
+        try {
+            const { stdout } = await execAsync("git remote get-url origin", { cwd: p.fullPath, timeout: 4000 });
+            cache[p.fullPath] = stdout.trim();
+        } catch { /* no remote — leave absent */ }
+    }));
+    persistRemoteUrlCache();
 }
 
 function getGitRemoteUrl(projectPath: string): string | undefined {
@@ -110,6 +131,7 @@ export class AutodetectProvider implements vscode.TreeDataProvider<ProjectNode>,
 
     private projectSource: CustomProjectLocator;
     private internalOnDidChangeTreeData: vscode.EventEmitter<ProjectNode | void> = new vscode.EventEmitter<ProjectNode | void>();
+    private prewarmPromise: Promise<void> | undefined;
 
     constructor(projectSource: CustomProjectLocator) {
         this.projectSource = projectSource;
@@ -145,7 +167,7 @@ export class AutodetectProvider implements vscode.TreeDataProvider<ProjectNode>,
     public getChildren(element?: ProjectNode): Thenable<ProjectNode[]> {
 
         // loop !!!
-        return new Promise(resolve => {
+        return (this.prewarmPromise ?? Promise.resolve()).then(() => new Promise(resolve => {
 
             if (element) {
 
@@ -218,7 +240,7 @@ export class AutodetectProvider implements vscode.TreeDataProvider<ProjectNode>,
 
                 resolve(lll);
             }
-        });
+        }));
     }
 
     public async showTreeView(): Promise<void> {
@@ -230,6 +252,10 @@ export class AutodetectProvider implements vscode.TreeDataProvider<ProjectNode>,
         }
 
         if (this.projectSource.displayName === "Git") {
+            // Kick off remote URL pre-warm and store the promise so getChildren()
+            // can await it — ensuring the cache is hot before deduplicateByRemote
+            // fires its execSync calls.
+            this.prewarmPromise = prewarmRemoteUrlCache(this.projectSource.projectList);
             const hideGitWelcome = Container.context.globalState.get<boolean>("hideGitWelcome", false);
             vscode.commands.executeCommand("setContext", "projectManager.canShowTreeView" + this.projectSource.displayName,
                 this.projectSource.projectList.length > 0 || !hideGitWelcome);

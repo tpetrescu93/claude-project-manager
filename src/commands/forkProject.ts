@@ -144,15 +144,23 @@ async function forkProject(node: ProjectNode, projectStorage: ProjectStorage) {
         return;
     }
 
-    const sourceName = path.basename(sourcePath);
+    const sourceFolderName = path.basename(sourcePath);
+    // Get the stored project name (branch only, repo prefix already stripped)
+    // so the input box prefills just the branch part for easy editing.
+    const sourceProject = (projectStorage as any).projects?.find(
+        (p: any) => path.resolve(p.rootPath) === path.resolve(sourcePath)
+    );
+    const sourceBranchName = sourceProject?.name ?? sourceFolderName;
+    const repoName = sourceProject?.repoName;
+
     const input = await window.showInputBox({
-        prompt: l10n.t("New project name (edit to fork into a new folder + branch)"),
-        value: sourceName,
-        valueSelection: [ 0, sourceName.length ],
+        prompt: l10n.t("New branch name"),
+        value: sourceBranchName,
+        valueSelection: [ 0, sourceBranchName.length ],
         validateInput: (value) => {
             const base = validateBranchName(value);
             if (base) { return base; }
-            if (value.trim() === sourceName) {
+            if (value.trim() === sourceBranchName) {
                 return l10n.t("Choose a different name from the source project.");
             }
             return undefined;
@@ -161,7 +169,9 @@ async function forkProject(node: ProjectNode, projectStorage: ProjectStorage) {
     if (!input) { return; }
     const newName = input.trim();
 
-    const targetDir = path.join(path.dirname(sourcePath), newName);
+    // Target folder uses the full "repo-branch" convention on disk.
+    const folderName = repoName ? `${repoName}-${newName}` : newName;
+    const targetDir = path.join(path.dirname(sourcePath), folderName);
     const pendingId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
     const sessionSrcDir = path.join(CLAUDE_PROJECTS_DIR, encodeProjectDir(sourcePath));
     const sessionDstDir = path.join(CLAUDE_PROJECTS_DIR, encodeProjectDir(targetDir));

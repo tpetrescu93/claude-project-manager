@@ -60,10 +60,11 @@ export function spawnDetachedClone(opts: {
             sessionId, sessionSrcDir, sessionDstDir,
             invSessionToKill, kind } = opts;
 
-    const pendingFile = shellQuote(path.join(pendingDir(), `${pendingId}.json`));
+    const pendingFilePath = path.join(pendingDir(), `${pendingId}.json`);
+    const pendingFile = shellQuote(pendingFilePath);
     const logFile = shellQuote(path.join(os.homedir(), ".project-manager", "clone-logs", `${pendingId}.log`));
-    const repoName = path.basename(sourcePath);
-    const pendingJson = JSON.stringify({ name: branchName, rootPath: targetDir, kind: kind ?? undefined, repoName });
+    // kind needs to reach the bash script for investigations
+    const kindJson = kind ? `,\\"kind\\":\\"${kind}\\"` : "";
 
     const sessionBlock = sessionId && sessionSrcDir && sessionDstDir ? `
 # 5. Copy Claude session (cwd-rewritten so --resume operates in the new folder)
@@ -101,9 +102,10 @@ tmux kill-session -t ${shellQuote("=" + invSessionToKill)} 2>/dev/null || true
 ` : "";
 
     const errorFile = shellQuote(path.join(pendingDir(), `${pendingId}.error`));
+    const logDir = shellQuote(path.join(os.homedir(), ".project-manager", "clone-logs"));
     const script = `#!/usr/bin/env bash
 set -euo pipefail
-mkdir -p "$(dirname ${logFile})"
+mkdir -p ${logDir}
 exec >> ${logFile} 2>&1
 
 _on_error() {
@@ -147,9 +149,26 @@ if [ -f yarn.lock ] || [ -f package-lock.json ]; then
     bun install && rm -f bun.lock bun.lockb || true
 fi
 ${sessionBlock}${killBlock}
+# Fix origin to point at the real upstream URL (local clone sets origin to the
+# source folder path, not the GitHub remote).
+_upstreamUrl=$(git -C ${shellQuote(sourcePath)} remote get-url origin 2>/dev/null || echo "")
+if [ -n "$_upstreamUrl" ]; then git remote set-url origin "$_upstreamUrl"; fi
+
+# Detect actual repo name from the upstream remote URL.
+_repoUrl=$(git remote get-url origin 2>/dev/null || echo "")
+_repoName=$(echo "$_repoUrl" | sed -E 's|.*[:/][^/]+/([^/.]+)(\.git)?[[:space:]]*$|\\1|')
+_storedName=${shellQuote(branchName)}
+if [ -n "$_repoName" ]; then
+    _prefix="${'$'}{_repoName}-"
+    case "$_storedName" in
+        "$_prefix"*) _storedName="${'$'}{_storedName#$_prefix}" ;;
+    esac
+fi
+_pendingJson=$(printf '{"name":"%s","rootPath":"%s","repoName":"%s"${kindJson}}' "$_storedName" ${shellQuote(targetDir)} "$_repoName")
+
 # Write pending file — signals the extension that the project is ready.
-mkdir -p "$(dirname ${pendingFile})"
-printf '%s' ${shellQuote(pendingJson)} > ${pendingFile}
+mkdir -p ${shellQuote(path.dirname(pendingFilePath))}
+printf '%s' "$_pendingJson" > ${pendingFile}
 echo "=== done $(date) ==="
 `;
 
@@ -172,8 +191,13 @@ async function cloneProject(node: ProjectNode, projectStorage: ProjectStorage) {
     if (!input) { return; }
     const branchName = input.trim();
 
-    const sourceName = path.basename(sourcePath);
-    const targetDir = path.join(path.dirname(sourcePath), `${sourceName}-${branchName}`);
+    // Use the stored repoName if available so the folder is "paydays-api-<branch>"
+    // even when cloning from a worktree whose folder already has the prefix.
+    const sourceProject = (projectStorage as any).projects?.find(
+        (p: any) => path.resolve(p.rootPath) === path.resolve(sourcePath)
+    );
+    const repoName = sourceProject?.repoName ?? path.basename(sourcePath);
+    const targetDir = path.join(path.dirname(sourcePath), `${repoName}-${branchName}`);
     const pendingId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
     spawnDetachedClone({ sourcePath, targetDir, branchName, pendingId });
