@@ -158,7 +158,12 @@ Right-click a project → "Clone to New Project". Input box for branch name (sto
 4. Symlink `.venv`: if source has a symlink `.venv` → `cp -P` (copy the symlink itself); if source has a real `.venv` dir → `ln -s`. Either way instant — no `uv sync` needed for same-deps branches.
 5. If `yarn.lock` or `package-lock.json` exists → `bun install && rm -f bun.lock bun.lockb`.
 
+5. After clone, `git remote set-url origin <upstream>` replaces the local-path origin (local `git clone` sets `origin` to the source folder path, not the GitHub remote, which breaks tools like `gpr` that parse the remote URL).
+6. Detect `repoName` from the corrected upstream URL and store just the branch in `projects.json` (strip `<repo>-` prefix if present).
+
 **Benchmark (paydays-api):** local clone 2.4s, fetch+reset 5.9s → ~8s total vs ~17.5s with the old rsync approach.
+
+**Known gotcha (fixed):** a bug caused the pending JSON to never be written — `mkdir -p "$(dirname 'quoted/path')"` included the single quotes in the dirname (from `shellQuote`), so `printf > pendingFile` silently failed and the project was registered by the migration with `repoName = path.basename(sourcePath)` (wrong). Fixed by computing `path.dirname` in TypeScript and shell-quoting separately.
 
 **Runs in the background — survives workspace switches.** All three heavy operations (clone, fork, promote) previously ran in-process via `await` chains that died when a workspace switch reloaded the extension host, silently abandoning the operation mid-rsync/git/bun. Now each operation:
 1. Gathers inputs in-process (input boxes, session ID snapshot).
@@ -204,6 +209,8 @@ View-title buttons on the Archived view: `$(search)` Search (filters the list by
 
 The `killTmuxSession` helper is reused across archive/delete/kill paths; it returns whether a session actually existed so the kill-tmux commands can show "Killed N session(s)" vs "No tmux session was running" honestly.
 
+**Known gotcha (fixed):** restore and delete used `node.label` (the display label `"paydays-api · branch"`) as the `projectStorage` lookup key. After the `repo · branch` rename the lookup silently failed — the entry was never removed. Fixed to use `node.preview.name` (the raw stored name).
+
 Replaced an earlier cron-based cleanup approach which was clobbering archived entries on reboot.
 
 ### Pin / unpin Git auto-detected repos — ✅ DONE
@@ -238,6 +245,7 @@ The detached post writes full output to a per-project log under `~/.project-mana
 ## Sidebar UI polish
 
 - **Hidden tag UI** — `View as Tags`, `View as List`, `Filter by Tag`, `Edit Tags` are hidden across the view title, `…` submenu, right-click menu, and command palette via `when: false`. Underlying storage and providers untouched.
+- **Git section first-expand pre-warm** — `deduplicateByRemote` calls `execSync("git remote get-url origin")` synchronously for every project to group repos. With ~39 projects this took ~1s on first expand (cold cache). Fixed by running the remote URL fetches in parallel with `execAsync` inside `showTreeView()` for the Git provider before `getChildren()` can fire, storing results in an in-memory cache backed by `globalState`. Subsequent expands in the same session are instant cache hits.
 - **Git section starts collapsed by default** — `visibility: "collapsed"` on `projectsExplorerGit`. Originally dropped (so it expanded), but the resulting default panel height was awkward and there's no extension API for content-fit sizing, so collapsing is the lesser evil. The workbench remembers expand/collapse per workspace, so this only affects fresh layouts.
 - **Click-to-switch on Git section** — dropped the `isGit ? undefined :` guard that previously made Git rows unclickable. Now click = switch workspace, same as Favorites.
 - **Inline button order** — explicit `inline@1` / `inline@2` ordering on Favorites rows so Slack icon is first, Open PR icon is last.
