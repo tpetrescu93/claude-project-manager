@@ -419,6 +419,16 @@
 				"icon": "$(trash)"
 			},
 			{
+				"command": "_projectManager.searchArchived",
+				"title": "%projectManager.commands.searchArchived.title%",
+				"icon": "$(search)"
+			},
+			{
+				"command": "_projectManager.clearSearchArchived",
+				"title": "%projectManager.commands.clearSearchArchived.title%",
+				"icon": "$(search-stop)"
+			},
+			{
 				"command": "_projectManager.archiveProject",
 				"title": "%projectManager.commands.archiveProject.title%"
 			},
@@ -456,6 +466,14 @@
 				},
 				{
 					"command": "_projectManager.openInNewWindow",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.searchArchived",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.clearSearchArchived",
 					"when": "false"
 				},
 				{
@@ -684,6 +702,16 @@
 					"command": "_projectManager.newInvestigation",
 					"when": "view == projectsExplorerFavorites",
 					"group": "navigation"
+				},
+				{
+					"command": "_projectManager.searchArchived",
+					"when": "view == projectsExplorerArchived",
+					"group": "navigation@0"
+				},
+				{
+					"command": "_projectManager.clearSearchArchived",
+					"when": "view == projectsExplorerArchived && projectManager.archivedFiltered",
+					"group": "navigation@0"
 				},
 				{
 					"command": "_projectManager.killAllArchivedTmux",

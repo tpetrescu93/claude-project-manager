@@ -54,6 +54,8 @@
     "projectManager.commands.forkInvestigation.title": "Fork Investigation + Claude Session...",
     "projectManager.commands.promoteInvestigation.title": "Promote to Project...",
     "projectManager.commands.deleteInvestigation.title": "Delete Investigation",
+    "projectManager.commands.searchArchived.title": "Search Archived",
+    "projectManager.commands.clearSearchArchived.title": "Clear Search",
     "projectManager.commands.archiveProject.title": "Archive",
     "projectManager.commands.restoreProject.title": "Restore",
     "projectManager.commands.deleteArchivedProject.title": "Delete",
