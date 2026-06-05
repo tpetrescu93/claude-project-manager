@@ -151,13 +151,14 @@ Not implemented. Was scoped (branch name, dirty count, ahead/behind) but deferre
 `TreeDragAndDropController` implementation. Within Favorites: persists the new order to `projects.json`. Within Git: persists a custom order to `gitItemOrder` in `globalState`.
 
 ### Clone-to-new-branch — ✅ DONE
-Right-click a project → "Clone to New Project". Input box for branch name. Steps:
-1. `rsync -a --exclude='node_modules/' --exclude='.venv/'` to a sibling directory `<src>-<branch>`.
-2. Clean git locks, fetch, checkout default branch (auto-detected from `origin/HEAD`), reset hard, then `git checkout -b <branch>`.
-3. If `yarn.lock` or `package-lock.json` exists → `bun install && rm -f bun.lock bun.lockb`.
-4. Register the new path in `projects.json` via `ProjectStorage.push()`.
+Right-click a project → "Clone to New Project". Input box for branch name (stores just the branch — the folder is `<repo>-<branch>` by convention, but `name` in `projects.json` is just the branch). Steps:
+1. `git clone <sourcePath> <targetDir>` — local hardlink clone (~2.4s for paydays-api vs ~11.5s for rsync).
+2. `git fetch origin` + detect canonical default branch (`origin/HEAD` → fallback to `main`/`master`/`develop`) → `git reset --hard origin/<default>` so the new branch always starts up-to-date regardless of what the source had checked out.
+3. `git checkout -b <branch>`.
+4. Symlink `.venv`: if source has a symlink `.venv` → `cp -P` (copy the symlink itself); if source has a real `.venv` dir → `ln -s`. Either way instant — no `uv sync` needed for same-deps branches.
+5. If `yarn.lock` or `package-lock.json` exists → `bun install && rm -f bun.lock bun.lockb`.
 
-Total runtime ~10–15s typical for a paydays-api clone.
+**Benchmark (paydays-api):** local clone 2.4s, fetch+reset 5.9s → ~8s total vs ~17.5s with the old rsync approach.
 
 **Runs in the background — survives workspace switches.** All three heavy operations (clone, fork, promote) previously ran in-process via `await` chains that died when a workspace switch reloaded the extension host, silently abandoning the operation mid-rsync/git/bun. Now each operation:
 1. Gathers inputs in-process (input boxes, session ID snapshot).
@@ -187,7 +188,7 @@ Design decisions that landed (some reversing the original sketch below):
 - **Folder**: an **empty scratch dir** created in `~/projects/<slug>` (slugified name, `Date.now()`-suffixed on collision). No git, no rsync, no install — just `mkdir`. Created empty on purpose; not a pointer at an existing repo.
 - **No auto-start**: creation only registers the investigation. tmux/Claude is started on demand via "Open Tmux Session" (the same `_projectManager.openTmuxSession` flow as a normal project).
 - **Opens like any project**: clicking does the same hard workspace switch (`_projectManager.open`); the row highlights as the current project (via `resourceUri` + the `projectManager-view` decoration) and gets the same Claude thinking/needs-input status icons (the status poll picks investigations up automatically now that they're in `projects.json`; they're skipped only in the git/PR status fetch, having no branch).
-- **Promote** (`$(rocket)`): turns a scratch investigation into real work. Picks a **pinned Git repo** (the filtered Git section), runs the **clone flow** (`performClone`) into a fresh `~/projects/<name>` folder, **carries the Claude session across** (`copySessionWithCwdRewrite` — same transcript-copy + `cwd`-rewrite as Fork), resumes it in a detached tmux session, then tears down the scratch investigation (kill tmux, `rm -rf` folder, pop the entry). A new cwd is created and the session is moved into it — the scratch folder is **not** reused (it has no git; promote's whole point is to land the session inside a real clone).
+- **Promote** (`$(rocket)`): turns a scratch investigation into real work. Picks a **pinned Git repo** (the filtered Git section), runs the **clone flow** (same detached bash script as Clone/Fork) into a fresh `~/projects/<name>` folder, **carries the Claude session across** (transcript copied + `cwd`-rewritten), resumes it in a tmux session, then tears down the scratch investigation (kill tmux, `rm -rf` folder, pop the entry). Runs in the background — safe to switch workspaces while it runs.
 - **Fork** (`$(git-branch)`, right-click only): split an investigation into two parallel lines. Creates a *new* scratch investigation in `~/projects`, carries the source's latest Claude session across (`copySessionWithCwdRewrite` + `latestSessionId`, same as the project Fork), resumes it in a detached tmux session, and leaves the source intact — so both share history up to the split point.
 - **Delete** (`$(trash)`): kills the tmux session (exact `=name` match) and removes both the folder and the `projects.json` entry, with a modal confirm.
 
@@ -199,7 +200,7 @@ Right-click → Archive moves an entry to a hidden "Archived" tree under Project
 - Inline buttons on hover: `$(discard)` Restore, `$(circle-slash)` Kill Tmux, `$(trash)` Delete (`inline@1` / `@2` / `@3`).
 - Right-click menu mirrors the same three actions.
 
-View-title buttons on the Archived view: `$(circle-slash)` "Kill All Archived Tmux Sessions" and `$(trash)` "Delete All Archived". Both iterate the disabled list and report a count.
+View-title buttons on the Archived view: `$(search)` Search (filters the list by typing — query matched against the `repo · branch` display label; a `$(search-stop)` clear button appears when active), `$(circle-slash)` "Kill All Archived Tmux Sessions", and `$(trash)` "Delete All Archived". Both iterate/kill/delete the full disabled list and report a count.
 
 The `killTmuxSession` helper is reused across archive/delete/kill paths; it returns whether a session actually existed so the kill-tmux commands can show "Killed N session(s)" vs "No tmux session was running" honestly.
 
@@ -224,7 +225,7 @@ The permalink store is **file-backed**, not `globalState`: one file per project 
 
 The 6s polling loop already detects `merged` transitions. When a project flips to `merged` AND has a stored permalink, the extension fires the `pr-slack-react` skill via another headless claude invocation, passing the permalink. The skill parses out `channel + ts`, calls `mcp__slack__add_reaction` with `name: merged_purple`, then deletes the entry on success.
 
-A **Remove Slack Link** right-click command (`deleteSlackPost`) clears a stored permalink manually — reverting the "posted" overlay and stopping the merge reaction for that PR.
+A **Remove Slack Link** right-click command (`deleteSlackPost`) clears a stored permalink manually — reverting the "posted" overlay and stopping the merge reaction for that PR. An **Attach Slack Link** right-click command (`attachSlackPost`) does the reverse — prompts for a permalink URL and stores it, activating the "posted" overlay and the merge auto-react — for PRs posted to Slack manually outside the extension.
 
 The detached post writes full output to a per-project log under `~/.project-manager/slack-logs/`. If the script exits without producing a `SLACK_POST:` permalink (failed claude run, skill not found, auth issue), it writes an error file to `~/.project-manager/pending-projects/slack-<id>.error` — the same reconciler that handles clone/fork/promote errors picks it up and shows a "Show Log" toast. The merge-react invocation logs to the `Project Manager: Slack React` output channel.
 
@@ -243,6 +244,8 @@ The detached post writes full output to a per-project log under `~/.project-mana
 - **Default icon = circle-outline** — projects without a polled PR status show the same "no PR" circle as projects that confirmed no PR, instead of the folder icon. Keeps the icon column visually consistent.
 - **Cross-tree selection desync** — Favorites and Git rows use different `resourceUri` schemes (`projectManager-view` vs `projectManager-readonly-view`) so selecting a project in one tree doesn't highlight it in the other.
 - **Replaced upstream icons** — name-prefix PR status (e.g. `[✅] foo`) and `✔` tick badges from upstream were removed in favour of dedicated icon slots. Inline "open PR in new window" button replaced by Open PR + Post to Slack buttons.
+- **`repo · branch` display labels** — projects store a `repoName` field (e.g. `"paydays-api"`) alongside the branch-only `name` (e.g. `"my-feature"`). The display label is rendered as `paydays-api · my-feature` in both the Projects and Archived views. Set from `git remote get-url origin` at clone/fork/promote time. A one-shot migration on activation backfills `repoName` and strips the repo prefix from any legacy full-name entries; guarded so it becomes a no-op once all projects are migrated. Investigations are unaffected.
+- **Defocus sidebar + focus terminal on project switch** — VS Code restores sidebar focus on workspace reload, leaving the cursor in the project list. On activation, the extension waits for `window.onDidChangeWindowState` (window focused = workbench fully rendered), then: if a `Tmux:` terminal exists → focus it; if `autoStartTmux` is set → create the session; otherwise → `focusActiveEditorGroup` to defocus the sidebar.
 
 ### Rich project tooltip — ✅ DONE
 Hovering a project/investigation row shows an at-a-glance card (`buildProjectTooltip` in `commands/projectTooltip.ts`), built **lazily via `StorageProvider.resolveTreeItem`** — `getTreeItem` clears the eager tooltip so VS Code invokes resolve only for the hovered node, and an 8s TTL cache absorbs hover jitter. The card is a `MarkdownString` with `supportThemeIcons` + `supportHtml` + `isTrusted` (HTML enables the colored spans).
