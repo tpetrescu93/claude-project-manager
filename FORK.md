@@ -350,22 +350,18 @@ The diff-based thinking detection (see Claude session status) only knows "this t
 ### Persist Claude thinking/needs-input across workspace switches
 The thinking/needs-input caches are in-memory only (unlike PR status, which persists to globalState). On a workspace switch the icons blank until the next 2s tmux poll repopulates them — a visible flicker. Tried persisting the caches to globalState and restoring on activation (like PR status); it did **not** eliminate the flicker (the tree renders before/around the restore, and the 2s poll re-fires regardless), so it was reverted. A real fix likely needs the restore to happen synchronously before the first tree render, or to suppress the first post-switch poll-driven refresh when the cached value is unchanged. Deferred — needs more investigation into the activation/render ordering.
 
-### Custom project description
-`projects.json` has no user-facing description field. Adding one (with fallback to the auto-populated parent-dir path) is ~50 lines: schema field + tree item read + context-menu command + showInputBox. Deferred — `description` slot is already populated with the parent path, which is the most useful signal.
 
-### Local git status
-Branch name, dirty count, ahead/behind. Would use `git status --porcelain=v1 -b` per favorite, plus filesystem watchers on `.git/HEAD` and `.git/index` for cheap near-instant updates. Deferred — PR/CI status covers higher-value signals.
+### Git section first-expand slowness (~1s)
+`deduplicateByRemote` calls `execSync("git remote get-url origin")` synchronously for every project in the Git section to group repos by remote. With ~39 projects this blocks the JS thread for ~1s on first expand (cold in-memory cache). The in-memory `remoteUrlCache` (backed by `globalState`) persists across the session so subsequent expands are instant — but the first expand after activation always pays the cost.
+
+**Root cause:** `getGitRemoteUrl` falls back to `execSync` on a cache miss, and on cold activation the cache starts empty. **Attempted fix (reverted):** pre-warm the cache inside `showTreeView()` using parallel `execAsync` calls; `getChildren()` awaited the prewarm promise before running `deduplicateByRemote`. Reverted because it was committed without confirmation.
+
+**Correct fix (not yet applied):** same approach — store the prewarm promise on the provider, have `getChildren` await it. Or: populate the `globalState` cache on activation (it currently only persists entry-by-entry on cache miss, so a fresh session never has anything to load from). Either eliminates the 1s block.
 
 ### Two-line rendering
 Project name on line 1, status detail on line 2. Not possible in TreeView (fixed row height, single label/description slot). Workaround via nested children is ugly (disclosure triangles, broken keyboard nav). Would require switching to a WebviewView, which means rebuilding keyboard nav, context menus, drag/drop, and accessibility from scratch.
 
-### Session actions — one-click commands injected into the live session
-A generic version of the Slack button: register a list of `{icon, label, keystrokes}` actions (in settings) that render as inline buttons on project rows and, on click, inject the keystrokes into that project's live tmux+Claude session (`tmux send-keys`). Turns any slash command or prompt (`/pr-slack`, `/rebase-and-monitor`, "commit and push") into a one-click row button, reusing the already-authenticated warm session — which sidesteps the whole Slack-auth problem for one-way "go do this" actions.
 
-Caveats (from the benchmark above and the detection work): submission via send-keys is flaky (text + *separate, delayed* Enter, and still occasionally sticks); it must be gated on Claude being the foreground process AND idle (else keystrokes land in bash or interleave with a running turn); and it's fire-and-forget — no result captured. So it fits one-way actions but NOT the merge-react (which needs the message `ts` back) — that stays on a mechanism that can capture output.
-
-### Slack — per-project channel
-`projectManager.slackChannelId` sets one global channel. Could be extended to a per-project mapping in settings. Trade-off: extra UI vs simplicity of one channel.
 
 ---
 
