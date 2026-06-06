@@ -107,11 +107,21 @@ export async function buildProjectTooltip(rootPath: string, label: string, isInv
     let unpushed: string | undefined;
     let localDiff: string | undefined;
     let sessionUptime: string | undefined;
+    let repoUrl: string | undefined;
 
     const tmuxName = rootPath.split("/").pop()!.replace(/\./g, "-");
     const tasks: Promise<void>[] = [];
 
     if (!isInvestigation) {
+        tasks.push((async () => {
+            const remote = await git(rootPath, "remote get-url origin");
+            if (!remote) { return; }
+            // Convert git remote URL to a browseable https:// URL.
+            // git@github.com:owner/repo.git  →  https://github.com/owner/repo
+            // https://token@github.com/owner/repo  →  https://github.com/owner/repo
+            const m = remote.match(/github\.com[/:]([^/]+)\/([^/\s.]+)/);
+            if (m) { repoUrl = `https://github.com/${m[1]}/${m[2]}`; }
+        })());
         // One status call yields branch, ahead-count (unpushed) and the dirty
         // count together — cheaper than three separate spawns.
         tasks.push((async () => {
@@ -163,6 +173,7 @@ export async function buildProjectTooltip(rootPath: string, label: string, isInv
     // repeat it as a bold heading — that read as a duplicate title. Lead with the
     // path (and a search marker for investigations) instead.
     md.appendMarkdown(`${isInvestigation ? "$(search) " : ""}_${escapeMd(rootPath)}_\n\n`);
+    if (repoUrl) { md.appendMarkdown(`[$(github) ${escapeMd(repoUrl.replace("https://github.com/", ""))}](${repoUrl})\n\n`); }
 
     const lines: string[] = [];
 

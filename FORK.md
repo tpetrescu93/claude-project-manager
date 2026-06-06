@@ -257,8 +257,9 @@ A **Remove Slack Link** right-click command clears a stored permalink (reverts t
 ### Rich project tooltip — ✅ DONE
 Hovering a project/investigation row shows an at-a-glance card (`buildProjectTooltip` in `commands/projectTooltip.ts`), built **lazily via `StorageProvider.resolveTreeItem`** — `getTreeItem` clears the eager tooltip so VS Code invokes resolve only for the hovered node, and an 8s TTL cache absorbs hover jitter. The card is a `MarkdownString` with `supportThemeIcons` + `supportHtml` + `isTrusted` (HTML enables the colored spans).
 
-Layout (open PR):
-- **PR title + number** as a link, with **`· @author`** alongside it.
+Layout:
+- **GitHub repo link** (`$(github) owner/repo`) — always shown directly below the path, derived lazily from `git remote get-url origin` (strips auth tokens, converts `git@github.com:` to `https://`).
+- **PR title + number** as a link, with **`· @author`** alongside it (when a PR exists).
 - **`jira: <KEY>`** link on its own line — key extracted from the PR title's bracketed prefix, falling back to the branch's leading `key-number` convention; links to `wagestream.atlassian.net/browse/<KEY>`.
 - **Slack** link directly below Jira (from the Slack post store).
 - **`updated <age> ago`** from the PR's `updatedAt`.
