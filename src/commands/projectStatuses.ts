@@ -100,6 +100,25 @@ export function getPrStatusForPath(rootPath: string): PrStatus {
     return statusCache.get(rootPath) ?? null;
 }
 
+/**
+ * Update the status cache to reflect the current Slack post store state and
+ * immediately refresh the project's icon — use after setSlackPost/deleteSlackPost
+ * so the overlay flips without waiting for the next 6s poll.
+ */
+export function refreshProjectStatusIcon(rootPath: string, providerManager: import("../sidebar/providers").Providers): void {
+    const current = statusCache.get(rootPath) ?? null;
+    const hasSlack = !!(getSlackPost(rootPath));
+    let updated: PrStatus = current;
+    if (hasSlack && current === "open_passing") { updated = "open_posted"; }
+    if (!hasSlack && current === "open_posted") { updated = "open_passing"; }
+    if (updated !== current) {
+        statusCache.set(rootPath, updated);
+        persistCachesToGlobalState();
+    }
+    statusChangeEmitter.fire();
+    refreshAfterStatusChange(providerManager, rootPath);
+}
+
 export function getPrUrlForPath(rootPath: string): string | undefined {
     return prUrlCache.get(rootPath);
 }

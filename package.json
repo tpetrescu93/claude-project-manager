@@ -897,7 +897,7 @@
 				},
 				{
 					"command": "_projectManager.postPrToSlack",
-					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
+					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind && config.projectManager.slackChannelId != ''",
 					"group": "inline@2"
 				},
 				{
@@ -962,12 +962,12 @@
 				},
 				{
 					"command": "_projectManager.attachSlackPost",
-					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
+					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind && config.projectManager.slackChannelId != ''",
 					"group": "favorites"
 				},
 				{
 					"command": "_projectManager.removeSlackPost",
-					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
+					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind && config.projectManager.slackChannelId != ''",
 					"group": "favorites"
 				},
 				{

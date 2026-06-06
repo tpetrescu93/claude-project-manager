@@ -73,7 +73,7 @@ export async function activate(context: vscode.ExtensionContext) {
     registerForkProject(projectStorage);
     registerInvestigations(projectStorage, providerManager);
     registerArchiveCommands(projectStorage, providerManager);
-    registerPostPrToSlack();
+    registerPostPrToSlack(providerManager);
     registerSortBy();
     registerSideBarDecorations();
     await registerWalkthrough();
