@@ -972,7 +972,7 @@
 				},
 				{
 					"command": "_projectManager.archiveProject",
-					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
+					"when": "view == projectsExplorerFavorites && viewItem =~ /^(ProjectNodeKind|InvestigationNodeKind)$/",
 					"group": "favorites"
 				},
 				{

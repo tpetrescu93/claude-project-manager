@@ -5,7 +5,7 @@ import { promisify } from "util";
 import { Container } from "../core/container";
 import { ProjectStorage } from "../storage/storage";
 import { Providers } from "../sidebar/providers";
-import { ProjectNode, ArchivedProjectNode } from "../sidebar/nodes";
+import { ProjectNode, ArchivedProjectNode, InvestigationNode } from "../sidebar/nodes";
 
 const execAsync = promisify(exec);
 
@@ -30,9 +30,9 @@ async function killTmuxSession(sessionName: string): Promise<boolean> {
     }
 }
 
-async function archiveProject(node: ProjectNode, projectStorage: ProjectStorage, providerManager: Providers) {
-    const projectName = node.preview.name;
-    const rootPath = node.preview.path;
+async function archiveProject(node: ProjectNode | InvestigationNode, projectStorage: ProjectStorage, providerManager: Providers) {
+    const projectName = node instanceof InvestigationNode ? node.label as string : node.preview.name;
+    const rootPath = node instanceof InvestigationNode ? node.rootPath : node.preview.path;
 
     // Kill tmux session if it exists
     const session = sessionNameFor(rootPath);
@@ -149,7 +149,7 @@ async function deleteAllArchived(projectStorage: ProjectStorage, providerManager
 export function registerArchiveCommands(projectStorage: ProjectStorage, providerManager: Providers) {
     Container.context.subscriptions.push(
         commands.registerCommand("_projectManager.archiveProject",
-            (node: ProjectNode) => archiveProject(node, projectStorage, providerManager)),
+            (node: ProjectNode | InvestigationNode) => archiveProject(node, projectStorage, providerManager)),
         commands.registerCommand("_projectManager.restoreProject",
             (node: ArchivedProjectNode) => restoreProject(node, projectStorage, providerManager)),
         commands.registerCommand("_projectManager.deleteArchivedProject",
