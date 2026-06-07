@@ -276,6 +276,9 @@ Investigations skip the git block (no repo) and lead with a `$(search)` marker +
 
 **Data:** the 6s bulk GraphQL query was extended to also cache `title`, `author`, `updatedAt`, `additions`/`deletions`/`changedFiles`, and review-thread counts into a `PrMeta` map (`getPrMetaForPath`) — measured cost stays ~2 points (see Remote PR section). **Perf:** the common case (project has a PR) resolves with **3 fully-parallel shell-outs** (status, tmux, and nothing else — the local diff/base resolution runs only when there's no PR). The VS Code hover *delay* itself is the user setting `workbench.hover.delay` (default 500ms), out of the extension's control.
 
+### Copy Project Path
+Right-click any project in Favorites, Git, Archived, or any auto-detected view → "Copy Project Path". Writes the project's `rootPath` to the clipboard and shows a brief confirmation toast.
+
 ### Ask Claude from editor
 Right-click any line in the editor → "Ask Claude". Opens an input box; the prompt is sent to the project's Claude tmux session via `tmux send-keys` with file context prepended:
 

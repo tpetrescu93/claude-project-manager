@@ -316,6 +316,10 @@
 				"title": "%projectManager.commands.addToWorkspace#sideBar.title%"
 			},
 			{
+				"command": "_projectManager.copyProjectPath",
+				"title": "%projectManager.commands.copyProjectPath.title%"
+			},
+			{
 				"command": "_projectManager.revealInFinder#sideBar",
 				"title": "%projectManager.commands.revealInFinder#sideBar.title%"
 			},
@@ -900,7 +904,7 @@
 					"group": "inline@3"
 				},
 				{
-					"command": "_projectManager.open",
+					"command": "_projectManager.copyProjectPath",
 					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
 					"group": "navigation"
 				},
@@ -970,7 +974,7 @@
 					"group": "inline"
 				},
 				{
-					"command": "_projectManager.open",
+					"command": "_projectManager.copyProjectPath",
 					"when": "view == projectsExplorerGit && viewItem =~ /^ProjectNodeKind/",
 					"group": "navigation"
 				},
@@ -1055,7 +1059,12 @@
 					"group": "archive"
 				},
 				{
-					"command": "_projectManager.open",
+					"command": "_projectManager.copyProjectPath",
+					"when": "view == projectsExplorerArchived && viewItem == ArchivedProjectNodeKind",
+					"group": "archive"
+				},
+				{
+					"command": "_projectManager.copyProjectPath",
 					"when": "view =~ /projectsExplorer(VSCode|SVN|Any|Mercurial)/ && viewItem =~ /^ProjectNodeKind/",
 					"group": "navigation"
 				},

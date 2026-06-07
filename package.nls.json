@@ -42,6 +42,7 @@
     "projectManager.commands.unpin.title": "Unpin",
     "projectManager.commands.showPinnedGitOnly.title": "Show Pinned Only",
     "projectManager.commands.showAllGit.title": "Show All",
+    "projectManager.commands.copyProjectPath.title": "Copy Project Path",
     "projectManager.commands.revealInFinder#sideBar.title": "Reveal in Finder",
     "projectManager.commands.revealInExplorer#sideBar.title": "Reveal in Explorer",
     "projectManager.commands.revealInFileManager#sideBar.title": "Reveal in File Manager",

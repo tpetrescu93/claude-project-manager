@@ -38,6 +38,7 @@ import { registerArchiveCommands } from "./commands/archiveProject";
 import { getPrUrlForPath, registerProjectStatuses } from "./commands/projectStatuses";
 import { registerPostPrToSlack } from "./commands/postPrToSlack";
 import { registerAskClaude } from "./commands/askClaude";
+import { registerCopyProjectPath } from "./commands/copyProjectPath";
 import { initShowPinnedOnlyContext, toggleGitRepoPin, toggleShowPinnedOnly } from "./commands/gitPinning";
 import { canSwitchOnActiveWindow, openPickedProject, pickProjects, shouldOpenInNewWindow } from "./quickpick/projectsPicker";
 import { CustomProjectLocator } from "./autodetect/abstractLocator";
@@ -76,6 +77,7 @@ export async function activate(context: vscode.ExtensionContext) {
     registerArchiveCommands(projectStorage, providerManager);
     registerPostPrToSlack(providerManager);
     registerAskClaude();
+    registerCopyProjectPath();
     registerSortBy();
     registerSideBarDecorations();
     await registerWalkthrough();
