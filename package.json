@@ -390,6 +390,11 @@
 				"icon": "$(git-branch)"
 			},
 			{
+				"command": "_projectManager.forkArchivedProject",
+				"title": "%projectManager.commands.forkProject.title%",
+				"icon": "$(git-branch)"
+			},
+			{
 				"command": "_projectManager.newInvestigation",
 				"title": "%projectManager.commands.newInvestigation.title%",
 				"icon": "$(add)"
@@ -521,6 +526,10 @@
 				},
 				{
 					"command": "_projectManager.forkProject",
+					"when": "false"
+				},
+				{
+					"command": "_projectManager.forkArchivedProject",
 					"when": "false"
 				},
 				{
@@ -913,11 +922,6 @@
 					"group": "favorites"
 				},
 				{
-					"command": "_projectManager.cloneProject",
-					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
-					"group": "favorites"
-				},
-				{
 					"command": "_projectManager.forkProject",
 					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
 					"group": "favorites"
@@ -925,12 +929,12 @@
 				{
 					"command": "_projectManager.attachSlackPost",
 					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind && config.projectManager.slackChannelId != ''",
-					"group": "favorites"
+					"group": "slack"
 				},
 				{
 					"command": "_projectManager.removeSlackPost",
 					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind && config.projectManager.slackChannelId != ''",
-					"group": "favorites"
+					"group": "slack"
 				},
 				{
 					"command": "_projectManager.archiveProject",
@@ -1023,6 +1027,11 @@
 					"group": "inline@3"
 				},
 				{
+					"command": "_projectManager.forkArchivedProject",
+					"when": "view == projectsExplorerArchived && viewItem == ArchivedProjectNodeKind",
+					"group": "archive"
+				},
+				{
 					"command": "_projectManager.killArchivedTmux",
 					"when": "view == projectsExplorerArchived && viewItem == ArchivedProjectNodeKind",
 					"group": "archive"
@@ -1061,11 +1070,6 @@
 					"command": "_projectManager.revealInFileManager#sideBar",
 					"when": "view =~ /projectsExplorer(VSCode|SVN|Any|Mercurial)/ && viewItem =~ /^ProjectNodeKind/ && isLinux",
 					"group": "navigation@2"
-				},
-				{
-					"command": "projectManager.addToWorkspace#sideBar",
-					"when": "view =~ /projectsExplorer(Favorites|VSCode|Git|SVN|Any|Mercurial)/ && viewItem =~ /^ProjectNodeKind/",
-					"group": "workspace"
 				},
 				{
 					"command": "projectManager.addToFavorites",
