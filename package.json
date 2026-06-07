@@ -109,10 +109,6 @@
 				"view": "projectsExplorerFavorites",
 				"contents": "%projectManager.viewsWelcome.favorites.contents.whenNotEmpty%",
 				"when": "workbenchState != empty"
-			},
-			{
-				"view": "projectsExplorerGit",
-				"contents": "%projectManager.viewsWelcome.git.contents%"
 			}
 		],
 		"commands": [

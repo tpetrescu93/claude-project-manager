@@ -352,12 +352,8 @@ The diff-based thinking detection (see Claude session status) only knows "this t
 The thinking/needs-input caches are in-memory only (unlike PR status, which persists to globalState). On a workspace switch the icons blank until the next 2s tmux poll repopulates them — a visible flicker. Tried persisting the caches to globalState and restoring on activation (like PR status); it did **not** eliminate the flicker (the tree renders before/around the restore, and the 2s poll re-fires regardless), so it was reverted. A real fix likely needs the restore to happen synchronously before the first tree render, or to suppress the first post-switch poll-driven refresh when the cached value is unchanged. Deferred — needs more investigation into the activation/render ordering.
 
 
-### Git section first-expand slowness (~1s)
-`deduplicateByRemote` calls `execSync("git remote get-url origin")` synchronously for every project in the Git section to group repos by remote. With ~39 projects this blocks the JS thread for ~1s on first expand (cold in-memory cache). The in-memory `remoteUrlCache` (backed by `globalState`) persists across the session so subsequent expands are instant — but the first expand after activation always pays the cost.
-
-**Root cause:** `getGitRemoteUrl` falls back to `execSync` on a cache miss, and on cold activation the cache starts empty. **Attempted fix (reverted):** pre-warm the cache inside `showTreeView()` using parallel `execAsync` calls; `getChildren()` awaited the prewarm promise before running `deduplicateByRemote`. Reverted because it was committed without confirmation.
-
-**Correct fix (not yet applied):** same approach — store the prewarm promise on the provider, have `getChildren` await it. Or: populate the `globalState` cache on activation (it currently only persists entry-by-entry on cache miss, so a fresh session never has anything to load from). Either eliminates the 1s block.
+### Empty-state / onboarding welcome screen
+The upstream extension had a `viewsWelcome` entry on `projectsExplorerGit` that showed a "configure base folders" message when no git repos were detected. This entry was **removed** because VS Code performs extra initialization work for views with `viewsWelcome` registered, causing a ~1s expand delay. A proper empty-state / first-run onboarding experience for new users should be added back in a way that doesn't cause this overhead. Deferred.
 
 ### Two-line rendering
 Project name on line 1, status detail on line 2. Not possible in TreeView (fixed row height, single label/description slot). Workaround via nested children is ugly (disclosure triangles, broken keyboard nav). Would require switching to a WebviewView, which means rebuilding keyboard nav, context menus, drag/drop, and accessibility from scratch.
