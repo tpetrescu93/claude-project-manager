@@ -726,24 +726,9 @@
 					"group": "navigation@11"
 				},
 				{
-					"command": "_projectManager.viewAsTags#sideBarFavorites",
-					"when": "false",
-					"group": "navigation@12"
-				},
-				{
-					"command": "_projectManager.viewAsList#sideBarFavorites",
-					"when": "false",
-					"group": "navigation@13"
-				},
-				{
 					"command": "projectManager.listFavoriteProjects#sideBarFavorites",
 					"when": "view == projectsExplorerFavorites",
-					"group": "navigation@14"
-				},
-				{
-					"command": "projectManager.filterProjectsByTag#sideBar",
-					"when": "false",
-					"group": "navigation@14"
+					"group": "navigation@12"
 				},
 				{
 					"submenu": "projectManager.sideBar.favorites.title",
@@ -868,6 +853,16 @@
 					"group": "investigation"
 				},
 				{
+					"command": "_projectManager.renameProject",
+					"when": "view == projectsExplorerFavorites && viewItem == InvestigationNodeKind",
+					"group": "investigation"
+				},
+				{
+					"command": "_projectManager.archiveProject",
+					"when": "view == projectsExplorerFavorites && viewItem == InvestigationNodeKind",
+					"group": "investigation"
+				},
+				{
 					"command": "_projectManager.deleteInvestigation",
 					"when": "view == projectsExplorerFavorites && viewItem == InvestigationNodeKind",
 					"group": "investigation"
@@ -888,6 +883,66 @@
 					"group": "inline@3"
 				},
 				{
+					"command": "_projectManager.open",
+					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
+					"group": "navigation"
+				},
+				{
+					"command": "_projectManager.openInNewWindow",
+					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
+					"group": "navigation"
+				},
+				{
+					"command": "_projectManager.revealInFinder#sideBar",
+					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind && isMac",
+					"group": "navigation@2"
+				},
+				{
+					"command": "_projectManager.revealInExplorer#sideBar",
+					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind && isWindows",
+					"group": "navigation@2"
+				},
+				{
+					"command": "_projectManager.revealInFileManager#sideBar",
+					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind && isLinux",
+					"group": "navigation@2"
+				},
+				{
+					"command": "_projectManager.openTmuxSession",
+					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
+					"group": "favorites"
+				},
+				{
+					"command": "_projectManager.cloneProject",
+					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
+					"group": "favorites"
+				},
+				{
+					"command": "_projectManager.forkProject",
+					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
+					"group": "favorites"
+				},
+				{
+					"command": "_projectManager.attachSlackPost",
+					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind && config.projectManager.slackChannelId != ''",
+					"group": "favorites"
+				},
+				{
+					"command": "_projectManager.removeSlackPost",
+					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind && config.projectManager.slackChannelId != ''",
+					"group": "favorites"
+				},
+				{
+					"command": "_projectManager.archiveProject",
+					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
+					"group": "favorites"
+				},
+				{
+					"command": "_projectManager.renameProject",
+					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
+					"group": "favorites"
+				},
+				{
 					"command": "_projectManager.pin",
 					"when": "view == projectsExplorerGit && viewItem == ProjectNodeKind",
 					"group": "inline"
@@ -904,58 +959,53 @@
 				},
 				{
 					"command": "_projectManager.open",
-					"when": "view =~ /projectsExplorer(Favorites|VSCode|Git|SVN|Any|Mercurial)/ && viewItem =~ /^ProjectNodeKind/",
+					"when": "view == projectsExplorerGit && viewItem =~ /^ProjectNodeKind/",
 					"group": "navigation"
 				},
 				{
 					"command": "_projectManager.openInNewWindow",
-					"when": "view =~ /projectsExplorer(Favorites|VSCode|Git|SVN|Any|Mercurial)/ && viewItem =~ /^ProjectNodeKind/",
+					"when": "view == projectsExplorerGit && viewItem =~ /^ProjectNodeKind/",
 					"group": "navigation"
 				},
 				{
 					"command": "_projectManager.revealInFinder#sideBar",
-					"when": "view =~ /projectsExplorer(Favorites|VSCode|Git|SVN|Any|Mercurial)/ && viewItem =~ /^ProjectNodeKind/ && isMac",
+					"when": "view == projectsExplorerGit && viewItem =~ /^ProjectNodeKind/ && isMac",
 					"group": "navigation@2"
 				},
 				{
 					"command": "_projectManager.revealInExplorer#sideBar",
-					"when": "view =~ /projectsExplorer(Favorites|VSCode|Git|SVN|Any|Mercurial)/ && viewItem =~ /^ProjectNodeKind/ && isWindows",
+					"when": "view == projectsExplorerGit && viewItem =~ /^ProjectNodeKind/ && isWindows",
 					"group": "navigation@2"
 				},
 				{
 					"command": "_projectManager.revealInFileManager#sideBar",
-					"when": "view =~ /projectsExplorer(Favorites|VSCode|Git|SVN|Any|Mercurial)/ && viewItem =~ /^ProjectNodeKind/ && isLinux",
+					"when": "view == projectsExplorerGit && viewItem =~ /^ProjectNodeKind/ && isLinux",
 					"group": "navigation@2"
 				},
 				{
 					"command": "_projectManager.openTmuxSession",
-					"when": "view =~ /projectsExplorer(Favorites|Git)/ && viewItem =~ /^ProjectNodeKind/",
+					"when": "view == projectsExplorerGit && viewItem =~ /^ProjectNodeKind/",
 					"group": "favorites"
 				},
 				{
 					"command": "_projectManager.cloneProject",
-					"when": "view =~ /projectsExplorer(Favorites|Git)/ && viewItem =~ /^ProjectNodeKind/",
+					"when": "view == projectsExplorerGit && viewItem =~ /^ProjectNodeKind/",
 					"group": "favorites"
 				},
 				{
 					"command": "_projectManager.forkProject",
-					"when": "view =~ /projectsExplorer(Favorites|Git)/ && viewItem =~ /^ProjectNodeKind/",
+					"when": "view == projectsExplorerGit && viewItem =~ /^ProjectNodeKind/",
 					"group": "favorites"
 				},
 				{
-					"command": "_projectManager.attachSlackPost",
-					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind && config.projectManager.slackChannelId != ''",
-					"group": "favorites"
+					"command": "_projectManager.pin",
+					"when": "view == projectsExplorerGit && viewItem == ProjectNodeKind",
+					"group": "workspace"
 				},
 				{
-					"command": "_projectManager.removeSlackPost",
-					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind && config.projectManager.slackChannelId != ''",
-					"group": "favorites"
-				},
-				{
-					"command": "_projectManager.archiveProject",
-					"when": "view == projectsExplorerFavorites && viewItem =~ /^(ProjectNodeKind|InvestigationNodeKind)$/",
-					"group": "favorites"
+					"command": "_projectManager.unpin",
+					"when": "view == projectsExplorerGit && viewItem == ProjectNodeKindPinned",
+					"group": "workspace"
 				},
 				{
 					"command": "_projectManager.restoreProject",
@@ -988,14 +1038,29 @@
 					"group": "archive"
 				},
 				{
-					"command": "_projectManager.renameProject",
-					"when": "view == projectsExplorerFavorites && viewItem =~ /^(ProjectNodeKind|InvestigationNodeKind)$/",
-					"group": "favorites"
+					"command": "_projectManager.open",
+					"when": "view =~ /projectsExplorer(VSCode|SVN|Any|Mercurial)/ && viewItem =~ /^ProjectNodeKind/",
+					"group": "navigation"
 				},
 				{
-					"command": "_projectManager.editTags",
-					"when": "false",
-					"group": "favorites"
+					"command": "_projectManager.openInNewWindow",
+					"when": "view =~ /projectsExplorer(VSCode|SVN|Any|Mercurial)/ && viewItem =~ /^ProjectNodeKind/",
+					"group": "navigation"
+				},
+				{
+					"command": "_projectManager.revealInFinder#sideBar",
+					"when": "view =~ /projectsExplorer(VSCode|SVN|Any|Mercurial)/ && viewItem =~ /^ProjectNodeKind/ && isMac",
+					"group": "navigation@2"
+				},
+				{
+					"command": "_projectManager.revealInExplorer#sideBar",
+					"when": "view =~ /projectsExplorer(VSCode|SVN|Any|Mercurial)/ && viewItem =~ /^ProjectNodeKind/ && isWindows",
+					"group": "navigation@2"
+				},
+				{
+					"command": "_projectManager.revealInFileManager#sideBar",
+					"when": "view =~ /projectsExplorer(VSCode|SVN|Any|Mercurial)/ && viewItem =~ /^ProjectNodeKind/ && isLinux",
+					"group": "navigation@2"
 				},
 				{
 					"command": "projectManager.addToWorkspace#sideBar",
@@ -1005,16 +1070,6 @@
 				{
 					"command": "projectManager.addToFavorites",
 					"when": "view =~ /projectsExplorer(VSCode|SVN|Any|Mercurial)/ && viewItem == ProjectNodeKind",
-					"group": "workspace"
-				},
-				{
-					"command": "_projectManager.pin",
-					"when": "view == projectsExplorerGit && viewItem == ProjectNodeKind",
-					"group": "workspace"
-				},
-				{
-					"command": "_projectManager.unpin",
-					"when": "view == projectsExplorerGit && viewItem == ProjectNodeKindPinned",
 					"group": "workspace"
 				}
 			],
@@ -1026,16 +1081,6 @@
 				}
 			],
 			"projectManager.sideBar.favorites.title": [
-				{
-					"command": "_projectManager.viewAsList#sideBarFavorites",
-					"when": "false",
-					"group": "1_projectManager#sideBarFavorites"
-				},
-				{
-					"command": "_projectManager.viewAsTags#sideBarFavorites",
-					"when": "false",
-					"group": "1_projectManager#sideBarFavorites"
-				},
 				{
 					"command": "_projectManager.sortBySaved#sideBarFavorites",
 					"group": "2_projectManager#sideBarFavorites"
@@ -1199,6 +1244,11 @@
 							"type": "string"
 						},
 						"description": "%projectManager.configuration.tags.description%"
+					},
+					"projectManager.slackChannelId": {
+						"type": "string",
+						"default": "",
+						"description": "Slack channel ID to post PRs to. When empty, the Slack post button is hidden."
 					},
 					"projectManager.tags.collapseItems": {
 						"type": "string",
