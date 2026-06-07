@@ -59,7 +59,6 @@ export class Providers {
 
         Container.context.subscriptions.push(
             vscode.commands.registerCommand("_projectManager.searchArchived", () => this.archivedProvider.search()),
-            vscode.commands.registerCommand("_projectManager.clearSearchArchived", () => this.archivedProvider.clearSearch()),
         );
         this.vscodeTreeView = vscode.window.createTreeView("projectsExplorerVSCode", {
             treeDataProvider: this.vscodeProvider,

@@ -10,7 +10,6 @@ export class ArchivedProvider implements vscode.TreeDataProvider<ArchivedProject
 
     private projectSource: ProjectStorage;
     private internalOnDidChangeTreeData: vscode.EventEmitter<ArchivedProjectNode | void> = new vscode.EventEmitter<ArchivedProjectNode | void>();
-    private filterQuery = "";
 
     constructor(projectSource: ProjectStorage) {
         this.projectSource = projectSource;
@@ -22,25 +21,39 @@ export class ArchivedProvider implements vscode.TreeDataProvider<ArchivedProject
     }
 
     public async search(): Promise<void> {
-        const query = await vscode.window.showInputBox({
-            prompt: "Filter archived projects",
-            placeHolder: "Type to filter…",
-            value: this.filterQuery,
+        const disabled = this.projectSource.disabled() || [];
+        if (disabled.length === 0) { return; }
+
+        interface ArchivedItem extends vscode.QuickPickItem {
+            rootPath: string;
+            projectName: string;
+        }
+
+        const items: ArchivedItem[] = disabled.map(p => {
+            const displayLabel = p.repoName ? `${p.repoName} · ${p.name}` : p.name;
+            return {
+                label: displayLabel,
+                description: PathUtils.expandHomePath(p.rootPath),
+                rootPath: PathUtils.expandHomePath(p.rootPath),
+                projectName: p.name,
+            };
         });
-        if (query === undefined) { return; } // cancelled
-        this.filterQuery = query.trim().toLowerCase();
-        vscode.commands.executeCommand("setContext", "projectManager.archivedFiltered", this.isFiltered);
-        this.refresh();
-    }
 
-    public clearSearch(): void {
-        this.filterQuery = "";
-        vscode.commands.executeCommand("setContext", "projectManager.archivedFiltered", false);
-        this.refresh();
-    }
+        const pick = vscode.window.createQuickPick<ArchivedItem>();
+        pick.placeholder = "Pick an archived project to open…";
+        pick.matchOnDescription = true;
+        pick.items = items;
 
-    public get isFiltered(): boolean {
-        return this.filterQuery.length > 0;
+        pick.onDidAccept(() => {
+            const selected = pick.selectedItems[0];
+            if (selected) {
+                vscode.commands.executeCommand("_projectManager.open", selected.rootPath, selected.projectName);
+            }
+            pick.hide();
+        });
+
+        pick.onDidHide(() => pick.dispose());
+        pick.show();
     }
 
     public getTreeItem(element: ArchivedProjectNode): vscode.TreeItem {
@@ -55,24 +68,18 @@ export class ArchivedProvider implements vscode.TreeDataProvider<ArchivedProject
 
     public getChildren(): Thenable<ArchivedProjectNode[]> {
         const disabled = this.projectSource.disabled() || [];
-        const nodes = disabled
-            .filter(p => {
-                if (!this.filterQuery) { return true; }
-                const displayLabel = p.repoName ? `${p.repoName} · ${p.name}` : p.name;
-                return displayLabel.toLowerCase().includes(this.filterQuery);
-            })
-            .map(p => {
-                const path = PathUtils.expandHomePath(p.rootPath);
-                const displayLabel = p.repoName ? `${p.repoName} · ${p.name}` : p.name;
-                return new ArchivedProjectNode(displayLabel, vscode.TreeItemCollapsibleState.None, {
-                    name: p.name,
-                    path
-                }, {
-                    command: "_projectManager.open",
-                    title: "",
-                    arguments: [ path, p.name ]
-                });
+        const nodes = disabled.map(p => {
+            const path = PathUtils.expandHomePath(p.rootPath);
+            const displayLabel = p.repoName ? `${p.repoName} · ${p.name}` : p.name;
+            return new ArchivedProjectNode(displayLabel, vscode.TreeItemCollapsibleState.None, {
+                name: p.name,
+                path
+            }, {
+                command: "_projectManager.open",
+                title: "",
+                arguments: [ path, p.name ]
             });
+        });
         return Promise.resolve(nodes);
     }
 }
