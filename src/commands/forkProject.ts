@@ -10,7 +10,8 @@ import { commands, l10n, window } from "vscode";
 import { Container } from "../core/container";
 import { ProjectStorage } from "../storage/storage";
 import { ProjectNode } from "../sidebar/nodes";
-import { spawnDetachedClone, validateBranchName, run } from "./cloneProject";
+import { spawnDetachedClone } from "./cloneProject";
+import { validateBranchName, run } from "./gitUtils";
 
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), ".claude", "projects");
 
@@ -135,32 +136,21 @@ function shellQuote(s: string): string {
     return `'${s.replace(/'/g, "'\\''")}'`;
 }
 
-async function forkProject(node: ProjectNode, projectStorage: ProjectStorage) {
-    const sourcePath = node.preview.path;
+async function doFork(sourcePath: string, sourceName: string, repoName: string | undefined) {
     const sessionId = latestSessionId(sourcePath);
-
     if (!sessionId) {
         window.showWarningMessage(l10n.t("No Claude session found for this project to fork. Use \"Clone to New Project\" for a plain clone."));
         return;
     }
 
-    const sourceFolderName = path.basename(sourcePath);
-    // Get the stored project name (branch only, repo prefix already stripped)
-    // so the input box prefills just the branch part for easy editing.
-    const sourceProject = (projectStorage as any).projects?.find(
-        (p: any) => path.resolve(p.rootPath) === path.resolve(sourcePath)
-    );
-    const sourceBranchName = sourceProject?.name ?? sourceFolderName;
-    const repoName = sourceProject?.repoName;
-
     const input = await window.showInputBox({
         prompt: l10n.t("New branch name"),
-        value: sourceBranchName,
-        valueSelection: [ 0, sourceBranchName.length ],
+        value: sourceName,
+        valueSelection: [ 0, sourceName.length ],
         validateInput: (value) => {
             const base = validateBranchName(value);
             if (base) { return base; }
-            if (value.trim() === sourceBranchName) {
+            if (value.trim() === sourceName) {
                 return l10n.t("Choose a different name from the source project.");
             }
             return undefined;
@@ -169,7 +159,6 @@ async function forkProject(node: ProjectNode, projectStorage: ProjectStorage) {
     if (!input) { return; }
     const newName = input.trim();
 
-    // Target folder uses the full "repo-branch" convention on disk.
     const folderName = repoName ? `${repoName}-${newName}` : newName;
     const targetDir = path.join(path.dirname(sourcePath), folderName);
     const pendingId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -185,8 +174,23 @@ async function forkProject(node: ProjectNode, projectStorage: ProjectStorage) {
     );
 }
 
+async function forkProject(node: ProjectNode, projectStorage: ProjectStorage) {
+    const sourcePath = node.preview.path;
+    const sourceProject = projectStorage.getAll().find(
+        p => path.resolve(p.rootPath) === path.resolve(sourcePath)
+    );
+    const sourceName = sourceProject?.name ?? path.basename(sourcePath);
+    await doFork(sourcePath, sourceName, sourceProject?.repoName);
+}
+
+async function forkArchivedProject(node: import("../sidebar/nodes").ArchivedProjectNode) {
+    const sourcePath = node.preview.path;
+    await doFork(sourcePath, node.preview.name, undefined);
+}
+
 export function registerForkProject(projectStorage: ProjectStorage) {
     Container.context.subscriptions.push(
-        commands.registerCommand("_projectManager.forkProject", (node: ProjectNode) => forkProject(node, projectStorage))
+        commands.registerCommand("_projectManager.forkProject", (node: ProjectNode) => forkProject(node, projectStorage)),
+        commands.registerCommand("_projectManager.forkArchivedProject", (node: import("../sidebar/nodes").ArchivedProjectNode) => forkArchivedProject(node)),
     );
 }

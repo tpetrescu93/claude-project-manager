@@ -10,30 +10,8 @@ import { commands, l10n, window } from "vscode";
 import { Container } from "../core/container";
 import { ProjectStorage } from "../storage/storage";
 import { ProjectNode } from "../sidebar/nodes";
-import { exec } from "child_process";
-import { promisify } from "util";
 import { pendingDir } from "./pendingProjectStore";
-
-const execAsync = promisify(exec);
-
-export async function run(cmd: string, cwd: string): Promise<string> {
-    const { stdout } = await execAsync(cmd, { cwd });
-    return stdout.trim();
-}
-
-/**
- * Validates a branch name for the input box.
- */
-export function validateBranchName(value: string): string | undefined {
-    if (!value || !value.trim()) {
-        return l10n.t("Branch name is required");
-    }
-    if (/[^a-zA-Z0-9\-_./]/.test(value)) {
-        return l10n.t("Invalid characters in branch name");
-    }
-    return undefined;
-}
-
+import { validateBranchName } from "./gitUtils";
 
 /**
  * Spawn a detached clone.sh script that clones sourcePath → targetDir on a new
@@ -95,8 +73,8 @@ async function cloneProject(node: ProjectNode, projectStorage: ProjectStorage) {
 
     // Use the stored repoName if available so the folder is "paydays-api-<branch>"
     // even when cloning from a worktree whose folder already has the prefix.
-    const sourceProject = (projectStorage as any).projects?.find(
-        (p: any) => path.resolve(p.rootPath) === path.resolve(sourcePath)
+    const sourceProject = projectStorage.getAll().find(
+        p => path.resolve(p.rootPath) === path.resolve(sourcePath)
     );
     const repoName = sourceProject?.repoName ?? path.basename(sourcePath);
     const targetDir = path.join(path.dirname(sourcePath), `${repoName}-${branchName}`);

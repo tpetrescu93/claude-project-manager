@@ -6,7 +6,8 @@ import { Container } from "../core/container";
 import { ProjectStorage } from "../storage/storage";
 import { Providers } from "../sidebar/providers";
 import { InvestigationNode } from "../sidebar/nodes";
-import { run, spawnDetachedClone } from "./cloneProject";
+import { spawnDetachedClone } from "./cloneProject";
+import { run } from "./gitUtils";
 import { latestSessionId, encodeProjectDir, copySessionWithCwdRewrite } from "./forkProject";
 import { getPinnedGitRepos } from "./gitPinning";
 
