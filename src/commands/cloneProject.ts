@@ -3,7 +3,6 @@
 *  Licensed under the GPLv3 License. See License.md in the project root for license information.
 *--------------------------------------------------------------------------------------------*/
 
-import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { spawn } from "child_process";
@@ -36,12 +35,8 @@ export function validateBranchName(value: string): string | undefined {
 }
 
 
-function shellQuote(s: string): string {
-    return `'${s.replace(/'/g, "'\\''")}'`;
-}
-
 /**
- * Spawn a detached bash script that clones sourcePath → targetDir on a new
+ * Spawn a detached clone.sh script that clones sourcePath → targetDir on a new
  * branch and writes a pending-project file on success, so the project appears
  * in the list even if the user switched workspaces mid-run.
  */
@@ -60,120 +55,27 @@ export function spawnDetachedClone(opts: {
             sessionId, sessionSrcDir, sessionDstDir,
             invSessionToKill, kind } = opts;
 
-    const pendingFilePath = path.join(pendingDir(), `${pendingId}.json`);
-    const pendingFile = shellQuote(pendingFilePath);
-    const logFile = shellQuote(path.join(os.homedir(), ".project-manager", "clone-logs", `${pendingId}.log`));
-    // kind needs to reach the bash script for investigations
-    const kindJson = kind ? `,\\"kind\\":\\"${kind}\\"` : "";
+    const scriptPath = path.join(Container.context.extensionPath, "dist", "scripts", "clone.sh");
+    const pendingFile = path.join(pendingDir(), `${pendingId}.json`);
+    const logFile = path.join(os.homedir(), ".project-manager", "clone-logs", `${pendingId}.log`);
+    const errorFile = path.join(pendingDir(), `${pendingId}.error`);
 
-    const sessionBlock = sessionId && sessionSrcDir && sessionDstDir ? `
-# 5. Copy Claude session (cwd-rewritten so --resume operates in the new folder)
-mkdir -p ${shellQuote(sessionDstDir)}
-srcJsonl=${shellQuote(path.join(sessionSrcDir, `${sessionId}.jsonl`))}
-dstJsonl=${shellQuote(path.join(sessionDstDir, `${sessionId}.jsonl`))}
-if [ -f "$srcJsonl" ]; then
-    jq -c --arg cwd ${shellQuote(targetDir)} 'if has("cwd") then .cwd = $cwd else . end' "$srcJsonl" > "$dstJsonl"
-    srcSub=${shellQuote(path.join(sessionSrcDir, sessionId))}
-    dstSub=${shellQuote(path.join(sessionDstDir, sessionId))}
-    if [ -d "$srcSub" ]; then
-        find "$srcSub" -type f | while IFS= read -r f; do
-            rel="\${f#$srcSub/}"
-            dst="$dstSub/$rel"
-            mkdir -p "$(dirname "$dst")"
-            if echo "$f" | grep -q '\\.jsonl$'; then
-                jq -c --arg cwd ${shellQuote(targetDir)} 'if has("cwd") then .cwd = $cwd else . end' "$f" > "$dst"
-            else
-                cp "$f" "$dst" 2>/dev/null || true
-            fi
-        done
-    fi
-fi
+    const args = [
+        sourcePath,
+        targetDir,
+        branchName,
+        pendingFile,
+        logFile,
+        errorFile,
+        pendingId,
+        sessionId ?? "",
+        sessionSrcDir ?? "",
+        sessionDstDir ?? "",
+        invSessionToKill ?? "",
+        kind ?? "",
+    ];
 
-# 6. Start tmux session resuming the copied Claude session
-sessionName=$(basename ${shellQuote(targetDir)} | tr '.' '-')
-tmux new-session -d -s "=$sessionName" -c ${shellQuote(targetDir)} bash -lic ${shellQuote(`claude --resume ${sessionId} --dangerously-skip-permissions`)} 2>/dev/null || true
-` : `
-# 5. (No session to copy)
-`;
-
-    const killBlock = invSessionToKill ? `
-# Post-clone: kill investigation tmux session
-tmux kill-session -t ${shellQuote("=" + invSessionToKill)} 2>/dev/null || true
-` : "";
-
-    const errorFile = shellQuote(path.join(pendingDir(), `${pendingId}.error`));
-    const logDir = shellQuote(path.join(os.homedir(), ".project-manager", "clone-logs"));
-    const script = `#!/usr/bin/env bash
-set -euo pipefail
-mkdir -p ${logDir}
-exec >> ${logFile} 2>&1
-
-_on_error() {
-    local line=$1
-    local msg="Failed at line $line — see log: $(eval echo ${logFile})"
-    printf '%s' ${shellQuote(JSON.stringify({ id: pendingId, message: "__MSG__", logFile: path.join(os.homedir(), ".project-manager", "clone-logs", `${pendingId}.log`) }))} \
-        | sed "s|__MSG__|$msg|" > $(eval echo ${errorFile})
-}
-trap '_on_error $LINENO' ERR
-
-echo "=== clone started $(date) ==="
-
-# 1. Local git clone — hardlinks .git objects, ~5x faster than rsync
-git clone ${shellQuote(sourcePath)} ${shellQuote(targetDir)}
-
-# 2. Fetch + reset to canonical default branch so we're always up to date
-cd ${shellQuote(targetDir)}
-git fetch origin
-defaultBranch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || true)
-if [ -z "$defaultBranch" ]; then
-    for b in main master develop; do
-        if git rev-parse --verify "origin/$b" >/dev/null 2>&1; then defaultBranch="$b"; break; fi
-    done
-fi
-git checkout -f "$defaultBranch"
-git reset --hard "origin/$defaultBranch"
-
-# 3. Create new branch
-git checkout -b ${shellQuote(branchName)}
-
-# 4. .venv: copy symlink if source has one, otherwise symlink the real dir
-src_venv=${shellQuote(sourcePath)}/.venv
-if [ -L "$src_venv" ]; then
-    cp -P "$src_venv" .venv
-elif [ -d "$src_venv" ]; then
-    ln -s "$src_venv" .venv
-fi
-
-# 5. bun install if JS lockfile present
-if [ -f yarn.lock ] || [ -f package-lock.json ]; then
-    bun install && rm -f bun.lock bun.lockb || true
-fi
-${sessionBlock}${killBlock}
-# Fix origin to point at the real upstream URL (local clone sets origin to the
-# source folder path, not the GitHub remote).
-_upstreamUrl=$(git -C ${shellQuote(sourcePath)} remote get-url origin 2>/dev/null || echo "")
-if [ -n "$_upstreamUrl" ]; then git remote set-url origin "$_upstreamUrl"; fi
-
-# Detect actual repo name from the upstream remote URL.
-_repoUrl=$(git remote get-url origin 2>/dev/null || echo "")
-_repoName=$(echo "$_repoUrl" | sed -E 's|.*[:/][^/]+/([^/.]+)(\.git)?[[:space:]]*$|\\1|')
-_storedName=${shellQuote(branchName)}
-if [ -n "$_repoName" ]; then
-    _prefix="${'$'}{_repoName}-"
-    case "$_storedName" in
-        "$_prefix"*) _storedName="${'$'}{_storedName#$_prefix}" ;;
-    esac
-fi
-_pendingJson=$(printf '{"name":"%s","rootPath":"%s","repoName":"%s"${kindJson}}' "$_storedName" ${shellQuote(targetDir)} "$_repoName")
-
-# Write pending file — signals the extension that the project is ready.
-mkdir -p ${shellQuote(path.dirname(pendingFilePath))}
-printf '%s' "$_pendingJson" > ${pendingFile}
-echo "=== done $(date) ==="
-`;
-
-    fs.mkdirSync(path.join(os.homedir(), ".project-manager", "clone-logs"), { recursive: true });
-    const child = spawn("bash", [ "-lc", script ], {
+    const child = spawn("bash", [ scriptPath, ...args ], {
         detached: true,
         stdio: "ignore",
     });

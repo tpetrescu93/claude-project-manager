@@ -159,14 +159,16 @@ Right-click a project → "Clone to New Project". Input box for branch name (sto
 
 **Benchmark (paydays-api):** local clone 2.4s, fetch+reset 5.9s → ~8s total vs ~17.5s with the old rsync approach.
 
-**Known gotcha (fixed):** a bug caused the pending JSON to never be written — `mkdir -p "$(dirname 'quoted/path')"` included the single quotes in the dirname (from `shellQuote`), so `printf > pendingFile` silently failed and the project was registered by the migration with `repoName = path.basename(sourcePath)` (wrong). Fixed by computing `path.dirname` in TypeScript and shell-quoting separately.
+**Known gotcha (fixed):** a bug caused the pending JSON to never be written — `mkdir -p "$(dirname 'quoted/path')"` included the single quotes in the dirname (from `shellQuote`), so `printf > pendingFile` silently failed and the project was registered by the migration with `repoName = path.basename(sourcePath)` (wrong). Fixed by computing `path.dirname` in TypeScript and shell-quoting separately. This whole class of quoting bug was then eliminated by the script-file refactor below.
 
 **Runs in the background — survives workspace switches.** All three heavy operations (clone, fork, promote) previously ran in-process via `await` chains that died when a workspace switch reloaded the extension host, silently abandoning the operation mid-rsync/git/bun. Now each operation:
 1. Gathers inputs in-process (input boxes, session ID snapshot).
-2. Spawns a **detached bash script** (built inline as a string in TypeScript, no file to distribute) with `{ detached: true }` + `child.unref()` — outlives the ext host.
+2. Spawns **`dist/scripts/clone.sh`** (a standalone bash script shipped in the extension bundle) with `{ detached: true }` + `child.unref()` — outlives the ext host. All variable-length values are passed as positional argv (`$1`…`$12`) so the OS delivers them verbatim — no shell quoting in TypeScript at all.
 3. Returns immediately with a "Running in background" toast.
 4. On success the script writes `~/.project-manager/pending-projects/<id>.json` with `{name, rootPath}`. On failure it writes `~/.project-manager/pending-projects/<id>.error` with the error message + log path (`~/.project-manager/clone-logs/<id>.log`).
 5. The extension **reconciles** on activation (covers the workspace-switch case) and via `fs.watch` on the pending dir (instant on macOS/FSEvents) + a 5s interval fallback (Linux/Windows where `fs.watch` is unreliable). Success files add the project to `projects.json`; error files surface a toast with a "Show Log" button.
+
+`src/scripts/clone.sh` is copied to `dist/scripts/` by a custom webpack plugin (`CopyScriptsPlugin` in `webpack.config.js`) after every build, and included in the `.vsix` bundle.
 
 The pending file approach (rather than writing directly to `projects.json`) is deliberate: the extension rewrites `projects.json` wholesale on every save and only reads it at load — an external writer would race it and the result wouldn't be seen live.
 

@@ -8,8 +8,26 @@
 
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
 const TerserPlugin = require('terser-webpack-plugin');
+
+// Copies src/scripts/ → dist/scripts/ after every build
+class CopyScriptsPlugin {
+    apply(compiler) {
+        compiler.hooks.afterEmit.tap('CopyScriptsPlugin', () => {
+            const src = path.resolve(__dirname, 'src/scripts');
+            const dst = path.resolve(__dirname, 'dist/scripts');
+            if (fs.existsSync(src)) {
+                fs.mkdirSync(dst, { recursive: true });
+                for (const f of fs.readdirSync(src)) {
+                    fs.copyFileSync(path.join(src, f), path.join(dst, f));
+                    fs.chmodSync(path.join(dst, f), 0o755);
+                }
+            }
+        });
+    }
+}
 
 /**@type {import('webpack').Configuration}*/
 const config = {
@@ -54,6 +72,7 @@ const config = {
             }]
         }]
     },
+    plugins: [new CopyScriptsPlugin()],
 }
 
 module.exports = config;
