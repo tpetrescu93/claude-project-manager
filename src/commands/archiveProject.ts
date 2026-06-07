@@ -7,7 +7,7 @@ import { ProjectStorage } from "../storage/storage";
 import { Providers } from "../sidebar/providers";
 import { ProjectNode, ArchivedProjectNode, InvestigationNode } from "../sidebar/nodes";
 import { getPrStatusForPath, getPrMetaForPath } from "./projectStatuses";
-import { findDoneTransitions, transitionIssue } from "./jiraClient";
+import { findDoneTransitions, transitionIssue, assignIssueToCurrentUser } from "./jiraClient";
 
 
 const execAsync = promisify(exec);
@@ -72,6 +72,7 @@ async function archiveProject(node: ProjectNode | InvestigationNode, projectStor
                 { placeHolder: l10n.t("Mark {0} as… (Esc to skip)", jiraKey) }
             );
             if (!picked) { return; }
+            await assignIssueToCurrentUser(jiraKey);
             await transitionIssue(jiraKey, picked.transition.id);
             window.showInformationMessage(l10n.t("{0} marked as \"{1}\".", jiraKey, picked.transition.name));
         } catch (err) {

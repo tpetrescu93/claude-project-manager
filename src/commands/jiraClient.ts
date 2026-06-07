@@ -53,6 +53,27 @@ export async function findDoneTransitions(issueKey: string): Promise<JiraDoneTra
     }).map(t => ({ id: t.id, name: t.name }));
 }
 
+/** Assigns the issue to the currently authenticated Jira user. */
+export async function assignIssueToCurrentUser(issueKey: string): Promise<void> {
+    const creds = loadCredentials();
+    if (!creds) { throw new Error("Jira credentials not found in ~/.claude.json"); }
+
+    const meResp = await fetch(`${creds.baseUrl}/rest/api/3/myself`, {
+        headers: { "Authorization": authHeader(creds), "Accept": "application/json" },
+    });
+    if (!meResp.ok) { throw new Error(`Failed to fetch current Jira user: HTTP ${meResp.status}`); }
+    const me = await meResp.json() as { accountId: string };
+
+    const assignResp = await fetch(`${creds.baseUrl}/rest/api/3/issue/${issueKey}/assignee`, {
+        method: "PUT",
+        headers: { "Authorization": authHeader(creds), "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId: me.accountId }),
+    });
+    if (!assignResp.ok && assignResp.status !== 204) {
+        throw new Error(`Failed to assign Jira issue: HTTP ${assignResp.status}`);
+    }
+}
+
 /** Transitions the issue to the given transition ID. */
 export async function transitionIssue(issueKey: string, transitionId: string): Promise<void> {
     const creds = loadCredentials();
