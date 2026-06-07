@@ -175,6 +175,7 @@ The pending file approach (rather than writing directly to `projects.json`) is d
 ### Fork Project + Claude Session
 Right-click a project that has a Claude session → "Fork Project + Claude Session...". Clones it to a new folder/branch (reusing the clone flow) AND carries the Claude conversation across so a new agent resumes where the old one left off, then diverges.
 
+- **Git state is intentionally discarded.** The fork always starts from the default branch (fetched fresh from origin), regardless of what branch or dirty state the source project was on. The only thing carried across is the Claude session — that's the entire point of fork. The source's git state is irrelevant.
 - **Name prompt** is prefilled with the source project's name, pre-selected for editing; the edited value becomes both the new folder name and the git branch (matches the folder≈branch convention). Blocks if left identical to the source.
 - **Session copy**: finds the source's newest transcript in `~/.claude/projects/<encoded-source-cwd>/`, copies it (and the subagent dir, recursively, best-effort, skipping non-regular files like IPC sockets) into `~/.claude/projects/<encoded-new-cwd>/`, **rewriting every entry's `cwd`** to the new path via `jq` — same mechanism as the `move` skill. Without the rewrite, `--resume` stays pinned to the source folder.
 - **Resume**: the detached bash script starts `claude --resume <session-id>` in a detached tmux session after the clone completes. Switching to the fork and "Open Tmux Session" attaches to the already-running resumed session.
