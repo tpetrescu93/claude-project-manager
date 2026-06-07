@@ -209,6 +209,10 @@ The `killTmuxSession` helper is reused across archive/delete/kill paths; it retu
 
 Replaced an earlier cron-based cleanup approach which was clobbering archived entries on reboot.
 
+**Jira transition on archive.** After archiving, if the project's PR was merged and the PR title contains a Jira key (e.g. `[CRED-4585]`), a quick pick appears with all available terminal Jira transitions for that ticket — sorted with `done/resolved/closed/complete` matches first, then the rest alphabetically. Selecting one transitions the ticket; Esc skips. Calls the Jira REST API directly (`POST /rest/api/3/issue/{key}/transitions`) using credentials from `~/.claude.json` (`mcpServers.atlassian.env.JIRA_URL/USERNAME/API_TOKEN`).
+
+**PR meta persistence.** `prMetaCache` (PR title, author, diff stats) is now persisted to `globalState` alongside `statusCache` and `prUrlCache`. Previously it was in-memory only and wiped on every activation — merged PRs lost their title immediately (the bulk query only fetches open PR nodes), making the Jira key unrecoverable. Now the title is kept until the project is deleted from `projects.json`.
+
 ### Pin / unpin Git auto-detected repos
 Right-click any Git-detected project to pin it. Pinned state stored in `globalState` under `gitPinnedRepos`. Inline pin/unpin button on each row (`ico-pin-filled.svg` / `ico-pin-outline.svg`, hardcoded white).
 

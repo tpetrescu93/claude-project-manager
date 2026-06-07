@@ -75,6 +75,7 @@ function refreshAfterStatusChange(providerManager: Providers, rootPath: string) 
 
 const STATUS_CACHE_KEY = "projectStatuses.statusCache";
 const PR_URL_CACHE_KEY = "projectStatuses.prUrlCache";
+const PR_META_CACHE_KEY = "projectStatuses.prMetaCache";
 
 function loadCachesFromGlobalState(): void {
     const status = Container.context.globalState.get<Record<string, PrStatus>>(STATUS_CACHE_KEY, {});
@@ -85,6 +86,10 @@ function loadCachesFromGlobalState(): void {
     for (const [ rootPath, value ] of Object.entries(urls)) {
         prUrlCache.set(rootPath, value);
     }
+    const meta = Container.context.globalState.get<Record<string, PrMeta>>(PR_META_CACHE_KEY, {});
+    for (const [ rootPath, value ] of Object.entries(meta)) {
+        prMetaCache.set(rootPath, value);
+    }
 }
 
 function persistCachesToGlobalState(): void {
@@ -92,8 +97,11 @@ function persistCachesToGlobalState(): void {
     for (const [ k, v ] of statusCache) { status[ k ] = v; }
     const urls: Record<string, string> = {};
     for (const [ k, v ] of prUrlCache) { urls[ k ] = v; }
+    const meta: Record<string, PrMeta> = {};
+    for (const [ k, v ] of prMetaCache) { meta[ k ] = v; }
     Container.context.globalState.update(STATUS_CACHE_KEY, status);
     Container.context.globalState.update(PR_URL_CACHE_KEY, urls);
+    Container.context.globalState.update(PR_META_CACHE_KEY, meta);
 }
 
 export function getPrStatusForPath(rootPath: string): PrStatus {
@@ -259,12 +267,11 @@ async function updateGitStatuses(projectStorage: ProjectStorage, providerManager
 }
 
 function applyStatusUpdate(rootPath: string, result: { status: PrStatus; url?: string; meta?: PrMeta }, providerManager: Providers) {
-    // PR metadata (for the hover tooltip) — store when an open PR was found,
-    // drop otherwise so a stale card doesn't linger after merge/close.
+    // PR metadata (for the hover tooltip) — store when an open PR was found.
+    // Never delete: title/author remain valid after merge and are needed for
+    // Jira transition on archive. Only cleared when the project is deleted.
     if (result.meta) {
         prMetaCache.set(rootPath, result.meta);
-    } else {
-        prMetaCache.delete(rootPath);
     }
     // "Posted to Slack" overlay: once a PR has been posted (a permalink is stored),
     // show open_posted instead of the plain green "passing, awaiting review" state.

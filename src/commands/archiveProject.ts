@@ -6,6 +6,9 @@ import { Container } from "../core/container";
 import { ProjectStorage } from "../storage/storage";
 import { Providers } from "../sidebar/providers";
 import { ProjectNode, ArchivedProjectNode, InvestigationNode } from "../sidebar/nodes";
+import { getPrStatusForPath, getPrMetaForPath } from "./projectStatuses";
+import { findDoneTransitions, transitionIssue } from "./jiraClient";
+
 
 const execAsync = promisify(exec);
 
@@ -30,6 +33,12 @@ async function killTmuxSession(sessionName: string): Promise<boolean> {
     }
 }
 
+function extractJiraKey(title: string | undefined): string | undefined {
+    if (!title) { return undefined; }
+    const m = title.match(/([A-Z][A-Z0-9]*-\d+)/);
+    return m ? m[1] : undefined;
+}
+
 async function archiveProject(node: ProjectNode | InvestigationNode, projectStorage: ProjectStorage, providerManager: Providers) {
     const projectName = node instanceof InvestigationNode ? node.label as string : node.preview.name;
     const rootPath = node instanceof InvestigationNode ? node.rootPath : node.preview.path;
@@ -44,6 +53,31 @@ async function archiveProject(node: ProjectNode | InvestigationNode, projectStor
     providerManager.refreshStorageTreeView();
 
     window.showInformationMessage(l10n.t("Project \"{0}\" archived.", projectName));
+
+    // If PR is merged and has a Jira key, offer to transition the ticket to Done.
+    if (node instanceof InvestigationNode) { return; }
+    const status = getPrStatusForPath(rootPath);
+    if (status !== "merged") { return; }
+    const meta = getPrMetaForPath(rootPath);
+    const jiraKey = extractJiraKey(meta?.title);
+    if (!jiraKey) { return; }
+
+    // Async — don't block the archive
+    (async () => {
+        try {
+            const transitions = await findDoneTransitions(jiraKey);
+            if (transitions.length === 0) { return; }
+            const picked = await window.showQuickPick(
+                transitions.map(t => ({ label: t.name, transition: t })),
+                { placeHolder: l10n.t("Mark {0} as… (Esc to skip)", jiraKey) }
+            );
+            if (!picked) { return; }
+            await transitionIssue(jiraKey, picked.transition.id);
+            window.showInformationMessage(l10n.t("{0} marked as \"{1}\".", jiraKey, picked.transition.name));
+        } catch (err) {
+            window.showErrorMessage(l10n.t("Failed to update Jira: {0}", err.message));
+        }
+    })();
 }
 
 async function restoreProject(node: ArchivedProjectNode, projectStorage: ProjectStorage, providerManager: Providers) {
