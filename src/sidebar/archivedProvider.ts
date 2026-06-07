@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { ProjectStorage } from "../storage/storage";
 import { PathUtils } from "../utils/path";
 import { ArchivedProjectNode } from "./nodes";
+import { buildProjectTooltip } from "../commands/projectTooltip";
 
 export class ArchivedProvider implements vscode.TreeDataProvider<ArchivedProjectNode> {
 
@@ -43,7 +44,13 @@ export class ArchivedProvider implements vscode.TreeDataProvider<ArchivedProject
     }
 
     public getTreeItem(element: ArchivedProjectNode): vscode.TreeItem {
+        element.tooltip = undefined; // cleared so resolveTreeItem is called lazily
         return element;
+    }
+
+    public async resolveTreeItem(item: vscode.TreeItem, element: ArchivedProjectNode): Promise<vscode.TreeItem> {
+        item.tooltip = await buildProjectTooltip(element.preview.path, element.preview.name, false);
+        return item;
     }
 
     public getChildren(): Thenable<ArchivedProjectNode[]> {
