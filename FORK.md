@@ -16,26 +16,26 @@ Two possible architectures for the sidebar view. The choice constrains which fea
 - Lose: native keyboard nav, native context menus, native drag/drop, built-in accessibility. All must be rebuilt manually.
 - Requires a separate JS/CSS bundle and a message-passing protocol between extension and webview.
 
-We stuck with TreeView throughout. All shipped features below work within its constraints; the few features that genuinely need webview (rich two-line rows, icon overlays, custom right-aligned controls) are listed under "Potential future features".
+We stuck with TreeView throughout. All shipped features below work within its constraints; the one feature that genuinely needs webview (two-line rows) is listed under "Potential future features".
 
 ---
 
 ## Visual customization
 
-### Colored label text — ✅ DONE
+### Colored label text
 Current project is highlighted via `FileDecorationProvider` using `projectManager.sideBar.currentProjectHighlightForeground`. One `ThemeColor` per row, applied to the whole label.
 
-### Per-state icons — ✅ DONE
+### Per-state icons
 Each project shows an icon reflecting its dominant status (see Status tracking). Mix of `ThemeIcon` (codicons with `ThemeColor`) and custom SVGs in `images/`. Tabler icons are used for pin/unpin and Claude state markers; uxwing icon is used for merge-conflict warning.
 
-### Animated indicators — ✅ DONE
+### Animated indicators
 Pending CI uses `ThemeIcon('sync~spin', charts.yellow)` — VS Code's native spinning animation. Claude thinking uses a custom SVG with SMIL opacity animation.
 
 ---
 
 ## Status tracking
 
-### Claude session status — ✅ DONE
+### Claude session status
 **Implementation:** tmux pane scraping every 2s, with diff-based thinking detection and a literal-string picker-footer match.
 
 **States detected:**
@@ -60,7 +60,7 @@ Pending CI uses `ThemeIcon('sync~spin', charts.yellow)` — VS Code's native spi
 - **JSONL transcript watching** at `~/.claude/projects/<encoded-cwd>/*.jsonl` via `fs.watch`. Rich data (per-turn entries with `stop_reason`, `tool_use`, etc.). Tried it; fundamental issues: distinguishing "Claude finished a turn" from "Claude is mid-turn" requires interpreting `stop_reason` values across many cases (`end_turn` / `tool_use` / `stop_sequence` / `max_tokens` / `pause_turn`); user prompts are encoded as a bare string in `message.content` (not a content-block array), forcing dual parse paths; the `[Request interrupted by user]` marker is written sometimes but not always; initial classification at startup keys off ancient stop_reasons, producing mass false-positive "needs input" for dormant sessions. Worked, but required a tmux-liveness gate to suppress the dormant-session false positives — which defeats the goal of being tmux-independent.
 - **Tmux pane scraping** (what we ship). Reflects the actual rendered UI, so any state change — including Ctrl+C in any phase — implicitly clears the spinner from the visible pane. The trade-off is ~450 lightweight tmux forks per minute at N=15 projects. After trying several regex variants (hardcoded 5 verbs, generalised `…(\d+s` with optional footer/shell patterns) and hitting brittleness or scrollback false positives, we settled on a **content-diff** approach: capture the area above the live `❯` prompt, compare to previous tick, flag thinking when it changed. The diff is intrinsically TUI-agnostic (catches multi-step plans, new spinner glyphs, future Claude UI changes) and has none of the regex-tuning churn. Picker-footer detection is still a literal string match because a stuck picker is static (no diff) — but scoped to the last 15 lines so source-code-in-scrollback doesn't trigger it.
 
-### Remote PR / CI / merge state — ✅ DONE
+### Remote PR / CI / merge state
 **Implementation:** in-process polling every 6s via a single bulk GraphQL query (see cadence note below). Targeted per-project tree refresh on change, or full re-sort when sort=Status.
 
 **Data:** one bulk GraphQL query per cycle (replacing the original N parallel `gh pr list` shell-outs).
@@ -124,7 +124,7 @@ Response handling per PR: prefer an OPEN PR (then map to conflicting / changes_r
 - **Event triggers (filesystem watcher on `.git/refs/heads/<branch>`, `window.onDidChangeWindowState`)**: would cut perceived latency on local pushes and tab re-focus to <1s. Considered and dropped — once polling dropped to 6s the marginal benefit didn't justify the extra moving parts.
 - **`gh pr checks --watch`**: gh has a "watch" mode but it's polling under the hood at a few-seconds cadence; running one per project means N persistent gh processes. Discarded.
 
-### Sort by Status — ✅ DONE
+### Sort by Status
 Ranking (lowest = highest in list):
 1. Claude needs input
 2. Claude thinking
@@ -140,26 +140,22 @@ Ranking (lowest = highest in list):
 
 Within a rank: alphabetical by label. When sort=Status is active, polling does a full tree re-sort instead of the usual per-node icon refresh.
 
-### Local git status
-Not implemented. Was scoped (branch name, dirty count, ahead/behind) but deferred — PR/CI status covers the higher-value signals.
-
 ---
 
 ## Project management actions
 
-### Drag-and-reorder favorites — ✅ DONE
+### Drag-and-reorder favorites
 `TreeDragAndDropController` implementation. Within Favorites: persists the new order to `projects.json`. Within Git: persists a custom order to `gitItemOrder` in `globalState`.
 
-### Clone-to-new-branch — ✅ DONE
+### Clone-to-new-branch
 Right-click a project → "Clone to New Project". Input box for branch name (stores just the branch — the folder is `<repo>-<branch>` by convention, but `name` in `projects.json` is just the branch). Steps:
 1. `git clone <sourcePath> <targetDir>` — local hardlink clone (~2.4s for paydays-api vs ~11.5s for rsync).
 2. `git fetch origin` + detect canonical default branch (`origin/HEAD` → fallback to `main`/`master`/`develop`) → `git reset --hard origin/<default>` so the new branch always starts up-to-date regardless of what the source had checked out.
 3. `git checkout -b <branch>`.
 4. Symlink `.venv`: if source has a symlink `.venv` → `cp -P` (copy the symlink itself); if source has a real `.venv` dir → `ln -s`. Either way instant — no `uv sync` needed for same-deps branches.
 5. If `yarn.lock` or `package-lock.json` exists → `bun install && rm -f bun.lock bun.lockb`.
-
-5. After clone, `git remote set-url origin <upstream>` replaces the local-path origin (local `git clone` sets `origin` to the source folder path, not the GitHub remote, which breaks tools like `gpr` that parse the remote URL).
-6. Detect `repoName` from the corrected upstream URL and store just the branch in `projects.json` (strip `<repo>-` prefix if present).
+6. `git remote set-url origin <upstream>` replaces the local-path origin (local `git clone` sets `origin` to the source folder path, not the GitHub remote, which breaks tools like `gpr` that parse the remote URL).
+7. Detect `repoName` from the corrected upstream URL and store just the branch in `projects.json` (strip `<repo>-` prefix if present).
 
 **Benchmark (paydays-api):** local clone 2.4s, fetch+reset 5.9s → ~8s total vs ~17.5s with the old rsync approach.
 
@@ -174,7 +170,7 @@ Right-click a project → "Clone to New Project". Input box for branch name (sto
 
 The pending file approach (rather than writing directly to `projects.json`) is deliberate: the extension rewrites `projects.json` wholesale on every save and only reads it at load — an external writer would race it and the result wouldn't be seen live.
 
-### Fork Project + Claude Session — ✅ DONE
+### Fork Project + Claude Session
 Right-click a project that has a Claude session → "Fork Project + Claude Session...". Clones it to a new folder/branch (reusing the clone flow) AND carries the Claude conversation across so a new agent resumes where the old one left off, then diverges.
 
 - **Name prompt** is prefilled with the source project's name, pre-selected for editing; the edited value becomes both the new folder name and the git branch (matches the folder≈branch convention). Blocks if left identical to the source.
@@ -183,9 +179,9 @@ Right-click a project that has a Claude session → "Fork Project + Claude Sessi
 - Toast offers an "Open Project" button to switch immediately, or you ignore it and keep working where you are.
 - The operation runs in the background (see Clone section) — safe to switch workspaces while it runs.
 
-Resolved the spec's open questions: `--resume` keys by session ID (`-r, --resume [value]` = "Resume a conversation by session ID"); the encoded dir is `rootPath.replace(/\//g, "-")` (leading dash kept); the fork *copies* (independent divergence, not shared); only `cwd` is rewritten (embedded paths in message history are left as historical record). `performClone` was factored out of `cloneProject.ts` for reuse.
+Resolved the spec's open questions: `--resume` keys by session ID (`-r, --resume [value]` = "Resume a conversation by session ID"); the encoded dir is `rootPath.replace(/\//g, "-")` (leading dash kept); the fork *copies* (independent divergence, not shared); only `cwd` is rewritten (embedded paths in message history are left as historical record).
 
-### Investigations — ✅ DONE
+### Investigations
 Lightweight scratch sessions for agent work that doesn't (yet) need a git checkout — "why is this failing in prod?", "explain this subsystem", "draft a query". A `$(add)` "New Investigation" button on the Projects view title prompts for a name and creates one near-instantly.
 
 Design decisions that landed (some reversing the original sketch below):
@@ -199,7 +195,7 @@ Design decisions that landed (some reversing the original sketch below):
 
 Inline buttons on an investigation row: `$(terminal)` Open Tmux, `$(rocket)` Promote, `$(trash)` Delete. Fork is right-click only. Context menu mirrors all of them.
 
-### Archive / restore / delete workflow — ✅ DONE
+### Archive / restore / delete workflow
 Right-click → Archive moves an entry to a hidden "Archived" tree under Projects. Archive also kills the project's tmux session inline (`tmux kill-session -t "<name>" 2>/dev/null`, name = `basename(rootPath).replace(/\./g, "-")`). Archived rows have:
 - Click-to-switch: opens the project, same as Favorites and Git.
 - Inline buttons on hover: `$(discard)` Restore, `$(circle-slash)` Kill Tmux, `$(trash)` Delete (`inline@1` / `@2` / `@3`).
@@ -213,17 +209,17 @@ The `killTmuxSession` helper is reused across archive/delete/kill paths; it retu
 
 Replaced an earlier cron-based cleanup approach which was clobbering archived entries on reboot.
 
-### Pin / unpin Git auto-detected repos — ✅ DONE
+### Pin / unpin Git auto-detected repos
 Right-click any Git-detected project to pin it. Pinned state stored in `globalState` under `gitPinnedRepos`. Inline pin/unpin button on each row (`ico-pin-filled.svg` / `ico-pin-outline.svg`, hardcoded white).
 
 Title-bar toggle "Show pinned only" filters the Git view to pinned repos only. The pinned set survives across reloads.
 
 Pinned Git entries also appear in the drag-reorder flow and the Sort-by-Status ordering.
 
-### Rename project — ✅ inherited from upstream
+### Rename project — inherited from upstream
 The existing rename command only changes the display name in `projects.json`; the rootPath is untouched. Extending it to also `fs.rename` the underlying folder was considered and rejected: renaming a folder out from under a live tmux+Claude session orphans the tmux session (name is frozen at creation), breaks thinking detection, degrades the running process's cwd (`$PWD` goes stale, `getcwd` can fail on macOS), and desyncs Claude's transcript dir (`~/.claude/projects/<encoded-cwd>/`). Not worth the failure modes.
 
-### Post PR to Slack + auto-react on merge — ✅ DONE
+### Post PR to Slack + auto-react on merge
 Inline Slack icon on each Favorites row (only shown when `projectManager.slackChannelId` is configured). Click → confirmation modal with PR URL → posts directly via the Slack MCP gateway — no `claude -p`, no skill dependency, sub-second.
 
 **Architecture:** calls the Wagestream MCP gateway (`https://mcp.ai.corp.stream.co/slack/mcp`) directly over HTTP using the OAuth token stored in the macOS Keychain under `"Claude Code-credentials"` (`mcpOAuth["slack|..."].accessToken`). No local MCP process needs to be running — it's a pure HTTPS call. Uses the `post_message` and `add_reaction` tools. A 401 surfaces as an error toast; token expiry requires re-authenticating via `claude mcp`.
@@ -254,7 +250,7 @@ A **Remove Slack Link** right-click command clears a stored permalink (reverts t
 - **`repo · branch` display labels** — projects store a `repoName` field (e.g. `"paydays-api"`) alongside the branch-only `name` (e.g. `"my-feature"`). The display label is rendered as `paydays-api · my-feature` in both the Projects and Archived views. Set from `git remote get-url origin` at clone/fork/promote time. A one-shot migration on activation backfills `repoName` and strips the repo prefix from any legacy full-name entries; guarded so it becomes a no-op once all projects are migrated. Investigations are unaffected.
 - **Defocus sidebar + focus terminal on project switch** — VS Code restores sidebar focus on workspace reload, leaving the cursor in the project list. On activation, the extension waits for `window.onDidChangeWindowState` (window focused = workbench fully rendered), then: if a `Tmux:` terminal exists → focus it; if `autoStartTmux` is set → create the session; otherwise → `focusActiveEditorGroup` to defocus the sidebar.
 
-### Rich project tooltip — ✅ DONE
+### Rich project tooltip
 Hovering a project/investigation row shows an at-a-glance card (`buildProjectTooltip` in `commands/projectTooltip.ts`), built **lazily via `StorageProvider.resolveTreeItem`** — `getTreeItem` clears the eager tooltip so VS Code invokes resolve only for the hovered node, and an 8s TTL cache absorbs hover jitter. The card is a `MarkdownString` with `supportThemeIcons` + `supportHtml` + `isTrusted` (HTML enables the colored spans).
 
 Layout:
@@ -277,7 +273,7 @@ Investigations skip the git block (no repo) and lead with a `$(search)` marker +
 
 ## Lifecycle hooks
 
-### Tmux session lifecycle — ✅ DONE
+### Tmux session lifecycle
 The `_projectManager.openTmuxSession` command (right-click → "Open Tmux Session") creates a terminal that runs an inline shell command:
 
 ```
@@ -348,6 +344,11 @@ Replace `vscode.openFolder(uri, …)` with `vscode.workspace.updateWorkspaceFold
 ### Gate thinking detection on Claude being the foreground process
 The diff-based thinking detection (see Claude session status) only knows "this tmux pane's content changed" — it has no concept of whether Claude is actually running. So a long-running *non-Claude* command in that session (`npm test`, `tail -f`, etc.), or typing at a bash prompt that doesn't use the `❯` character, can falsely light up the thinking swirl. Could gate on the foreground process via `tmux display-message -p '#{pane_current_command}'` (check for `claude`/`node`) before treating a diff as "Claude thinking". Deferred — in practice each tmux session here is dedicated to Claude, so false positives are rare.
 
+### Background agent / workflow status not detected
+The thinking/needs-input detection relies on `tmux capture-pane` scraping the foreground Claude TUI. Background agents (e.g. workflows invoked via `claude -p` or the Workflow tool) run headless with no tmux pane — their activity is invisible to the status poll. A project running a long background workflow shows no indicator despite active Claude work.
+
+The tmux status bar footer produced by the Claude harness contains real-time progress information, e.g. `◯ learn-archived  Run the learn skill…  22/71 agents done · 5m 9s · ↓ 2.7m tokens`.
+
 ### Persist Claude thinking/needs-input across workspace switches
 The thinking/needs-input caches are in-memory only (unlike PR status, which persists to globalState). On a workspace switch the icons blank until the next 2s tmux poll repopulates them — a visible flicker. Tried persisting the caches to globalState and restoring on activation (like PR status); it did **not** eliminate the flicker (the tree renders before/around the restore, and the 2s poll re-fires regardless), so it was reverted. A real fix likely needs the restore to happen synchronously before the first tree render, or to suppress the first post-switch poll-driven refresh when the cached value is unchanged. Deferred — needs more investigation into the activation/render ordering.
 
@@ -369,7 +370,7 @@ Based on the upstream repo's PR history (as of 2026-04-13):
 - Actively maintained. Last push 2026-04-08, v13.1.0 released March 2026.
 - Maintainer (alefragnani) does most feature work via GitHub Copilot's SWE agent.
 - External contributor PRs for non-trivial features tend to sit open for months or get closed without merge.
-- PR #884 ("Display Git branch in Side Bar") has been open since 2026-01-12. Overlapping with local-git-status if we ever build that.
+- PR #884 ("Display Git branch in Side Bar") has been open since 2026-01-12.
 - PR #922 ("Display Git Worktrees as Subdirectories") was closed within 5 hours — signals worktree/clone features may not be welcome.
 
 Features most likely to be accepted upstream if proposed cleanly: drag-and-reorder.
@@ -437,11 +438,3 @@ VS Code can't install extensions from a git URL. Options:
 
 4. **Extension Development Host (F5)**: launches a second VS Code window with the extension loaded from source. Standard dev loop.
 
-### Skills (out-of-repo dependencies)
-
-The Slack post + auto-react flow depends on two skills that live at `~/.claude/skills/` — outside this repo:
-
-- `~/.claude/skills/pr-slack/SKILL.md` — posts the current branch's PR to a Slack channel, prints `SLACK_POST: <permalink>` marker for the extension to parse.
-- `~/.claude/skills/pr-slack-react/SKILL.md` — given a Slack permalink, adds the `:merged_purple:` reaction.
-
-These aren't versioned with the extension. Back them up separately.
