@@ -201,7 +201,7 @@ Right-click → Archive moves an entry to a hidden "Archived" tree under Project
 - Inline buttons on hover: `$(discard)` Restore, `$(circle-slash)` Kill Tmux, `$(trash)` Delete (`inline@1` / `@2` / `@3`).
 - Right-click menu mirrors the same three actions.
 
-View-title buttons on the Archived view: `$(search)` Search (filters the list by typing — query matched against the `repo · branch` display label; a `$(search-stop)` clear button appears when active), `$(circle-slash)` "Kill All Archived Tmux Sessions", and `$(trash)` "Delete All Archived". Both iterate/kill/delete the full disabled list and report a count.
+View-title buttons on the Archived view: `$(search)` Search (opens a `createQuickPick` popup with all archived projects; type to fuzzy-filter by label or path; selecting an item opens the project directly), `$(circle-slash)` "Kill All Archived Tmux Sessions", and `$(trash)` "Delete All Archived". Both iterate/kill/delete the full disabled list and report a count.
 
 The `killTmuxSession` helper is reused across archive/delete/kill paths; it returns whether a session actually existed so the kill-tmux commands can show "Killed N session(s)" vs "No tmux session was running" honestly.
 
