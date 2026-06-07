@@ -1,6 +1,6 @@
 import { exec } from "child_process";
 import { promisify } from "util";
-import { PrStatus, PrMeta } from "./projectStatuses";
+import { PrStatus, PrMeta } from "./prStatusTypes";
 
 const execAsync = promisify(exec);
 
