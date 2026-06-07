@@ -91,7 +91,7 @@ async function resolveBulkInput(rootPath: string): Promise<BulkFetchInput | null
 }
 
 function cleanLegacyPrefixes(projectStorage: ProjectStorage): boolean {
-    const projects = (projectStorage as any).projects as Array<{ name: string; rootPath: string }>;
+    const projects = projectStorage.getAll();
     if (!projects) { return false; }
     let changed = false;
     for (const project of projects) {
@@ -151,7 +151,7 @@ function applyStatusUpdate(
 }
 
 async function updateGitStatuses(projectStorage: ProjectStorage, providerManager: Providers) {
-    const projects = (projectStorage as any).projects as Array<{ name: string; rootPath: string; enabled?: boolean; kind?: string }>;
+    const projects = projectStorage.getAll();
     if (!projects || projects.length === 0) { return; }
 
     const eligible = projects.filter(p =>
@@ -180,7 +180,7 @@ async function updateGitStatuses(projectStorage: ProjectStorage, providerManager
 }
 
 async function updateClaudeStatuses(projectStorage: ProjectStorage, providerManager: Providers) {
-    const projects = (projectStorage as any).projects as Array<{ name: string; rootPath: string; enabled?: boolean }> | undefined;
+    const projects = projectStorage.getAll();
     const active = projects?.filter(p => p.enabled !== false);
     if (!active || active.length === 0) { return; }
 
@@ -206,7 +206,7 @@ async function updateClaudeStatuses(projectStorage: ProjectStorage, providerMana
 }
 
 async function migrateRepoNames(projectStorage: ProjectStorage, providerManager: Providers): Promise<void> {
-    const projects = (projectStorage as any).projects as Array<{ name: string; rootPath: string; kind?: string; repoName?: string }>;
+    const projects = projectStorage.getAll();
     const needsMigration = projects.filter(p => p.kind !== "investigation" && !p.repoName);
     if (needsMigration.length === 0) { return; }
 

@@ -114,6 +114,10 @@ export class ProjectStorage {
         return this.projects.length;
     }
 
+    public getAll(): Project[] {
+        return this.projects;
+    }
+
     public load(): string {
         let items: Array<any> = [];
 
