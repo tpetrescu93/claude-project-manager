@@ -11,7 +11,7 @@ import { Container } from "../core/container";
 import { ProjectStorage } from "../storage/storage";
 import { ProjectNode } from "../sidebar/nodes";
 import { spawnDetachedClone } from "./cloneProject";
-import { validateBranchName, run } from "./gitUtils";
+import { validateBranchName, run, shellQuote } from "./gitUtils";
 
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), ".claude", "projects");
 
@@ -132,9 +132,6 @@ async function copyTreeWithCwdRewrite(srcDir: string, dstDir: string, targetPath
     }
 }
 
-function shellQuote(s: string): string {
-    return `'${s.replace(/'/g, "'\\''")}'`;
-}
 
 async function doFork(sourcePath: string, sourceName: string, repoName: string | undefined) {
     const sessionId = latestSessionId(sourcePath);

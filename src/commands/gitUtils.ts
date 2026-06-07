@@ -9,6 +9,10 @@ export async function run(cmd: string, cwd: string): Promise<string> {
     return stdout.trim();
 }
 
+export function shellQuote(s: string): string {
+    return `'${s.replace(/'/g, "'\\''")}'`;
+}
+
 export function validateBranchName(value: string): string | undefined {
     if (!value || !value.trim()) {
         return l10n.t("Branch name is required");
