@@ -69,6 +69,12 @@ function statusWords(status: PrStatus): string | undefined {
     }
 }
 
+const YELLOW = "#f5e642";
+
+function fmtDiff(files: number | string, additions: number | string, deletions: number | string): string {
+    return `${colored("~" + files + "f", YELLOW)} ${colored("+" + additions, GREEN)} ${colored("−" + deletions, RED)}`;
+}
+
 function escapeMd(s: string): string {
     // Defang the markdown control chars that show up in PR titles / commit subjects.
     return s.replace(/([\\`*_{}\[\]()#+\-.!|])/g, "\\$1");
@@ -106,6 +112,9 @@ export async function buildProjectTooltip(rootPath: string, label: string, isInv
     let dirtyCount = 0;
     let unpushed: string | undefined;
     let localDiff: string | undefined;
+    let localInsertions = 0;
+    let localDeletions = 0;
+    let localFiles = 0;
     let sessionUptime: string | undefined;
     let repoUrl: string | undefined;
 
@@ -137,8 +146,32 @@ export async function buildProjectTooltip(rootPath: string, label: string, isInv
             }
             dirtyCount = lines.filter(l => l && !l.startsWith("#")).length;
         })());
-        // Local working-diff is only the fallback when there's no PR meta — only
-        // then do we pay for base-branch resolution + a diff.
+        // Uncommitted local diff (always — shown next to branch name).
+        tasks.push((async () => {
+            const stat = await git(rootPath, "diff --shortstat HEAD");
+            if (stat) {
+                const filesMatch = stat.match(/(\d+) files? changed/);
+                const ins = stat.match(/(\d+) insertion/);
+                const del = stat.match(/(\d+) deletion/);
+                localFiles = filesMatch ? parseInt(filesMatch[1]) : 0;
+                localInsertions = ins ? parseInt(ins[1]) : 0;
+                localDeletions = del ? parseInt(del[1]) : 0;
+            }
+            // Add line counts from untracked files
+            const untrackedList = await git(rootPath, "ls-files --others --exclude-standard");
+            if (untrackedList) {
+                const files = untrackedList.split("\n").filter(Boolean);
+                let untrackedLines = 0;
+                await Promise.all(files.map(async f => {
+                    try {
+                        const { stdout } = await execAsync(`wc -l < "${rootPath}/${f}"`, { timeout: 2000 });
+                        untrackedLines += parseInt(stdout.trim()) || 0;
+                    } catch { /* skip */ }
+                }));
+                localInsertions += untrackedLines;
+            }
+        })());
+        // Local diff vs base — fallback when there's no PR meta.
         if (!meta) {
             tasks.push((async () => {
                 const baseRef = await git(rootPath, "symbolic-ref --short refs/remotes/origin/HEAD");
@@ -196,10 +229,11 @@ export async function buildProjectTooltip(rootPath: string, label: string, isInv
         }
     }
     const sw = statusWords(status);
-    if (sw) { lines.push(sw); }
+    if (sw) {
+        const prDiff = meta ? ` · ${fmtDiff(meta.changedFiles, meta.additions, meta.deletions)}` : "";
+        lines.push(`${sw}${prDiff}`);
+    }
     if (meta) {
-        // Diff size from the PR (GitHub's computed merge diff).
-        lines.push(`$(diff) ${colored("+" + meta.additions, GREEN)} ${colored("−" + meta.deletions, RED)} · ${meta.changedFiles} file${meta.changedFiles === 1 ? "" : "s"}`);
         if (meta.totalThreads > 0) {
             lines.push(meta.unresolvedThreads > 0
                 ? `$(comment) ${colored(`${meta.unresolvedThreads}/${meta.totalThreads} threads unresolved`, RED)}`
@@ -209,14 +243,19 @@ export async function buildProjectTooltip(rootPath: string, label: string, isInv
     } else if (localDiff) {
         // No PR — fall back to the local working diff vs base.
         const m = localDiff.match(/(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?/);
-        if (m) { lines.push(`$(diff) ${colored("+" + (m[ 2 ] ?? 0), GREEN)} ${colored("−" + (m[ 3 ] ?? 0), RED)} · ${m[ 1 ]} file${m[ 1 ] === "1" ? "" : "s"} (uncommitted vs base)`); }
+        if (m) { lines.push(`$(diff) ${fmtDiff(m[ 1 ], m[ 2 ] ?? 0, m[ 3 ] ?? 0)} (local)`); }
     }
 
     if (lines.length) { md.appendMarkdown(lines.join("\n\n") + "\n\n"); }
 
     // git / local block
     const gitLines: string[] = [];
-    if (branch) { gitLines.push(`$(git-branch) ${escapeMd(branch)}`); }
+    if (branch) {
+        const localDiffStr = (localInsertions > 0 || localDeletions > 0 || dirtyCount > 0)
+            ? ` ${fmtDiff(dirtyCount, localInsertions, localDeletions)}`
+            : "";
+        gitLines.push(`$(git-branch) ${escapeMd(branch)}${localDiffStr}`);
+    }
     const flags: string[] = [];
     if (dirtyCount > 0) { flags.push(`$(pencil) ${dirtyCount} uncommitted`); }
     if (unpushed && unpushed !== "0") { flags.push(`$(cloud-upload) ${unpushed} unpushed`); }
