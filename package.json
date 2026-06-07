@@ -452,10 +452,18 @@
 				"command": "_projectManager.killAllArchivedTmux",
 				"title": "%projectManager.commands.killAllArchivedTmux.title%",
 				"icon": "$(circle-slash)"
+			},
+			{
+				"command": "_projectManager.askClaude",
+				"title": "Ask Claude"
 			}
 		],
 		"menus": {
 			"commandPalette": [
+				{
+					"command": "_projectManager.askClaude",
+					"when": "false"
+				},
 				{
 					"command": "_projectManager.open",
 					"when": "false"
@@ -1075,6 +1083,13 @@
 					"command": "projectManager.addToFavorites",
 					"when": "view =~ /projectsExplorer(VSCode|SVN|Any|Mercurial)/ && viewItem == ProjectNodeKind",
 					"group": "workspace"
+				}
+			],
+			"editor/context": [
+				{
+					"command": "_projectManager.askClaude",
+					"when": "editorFocus",
+					"group": "projectManager"
 				}
 			],
 			"extension/context": [
