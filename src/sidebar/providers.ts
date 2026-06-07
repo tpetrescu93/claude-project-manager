@@ -11,6 +11,7 @@ import { AutodetectProvider, deduplicateByRemote } from "./autodetectProvider";
 import { ArchivedProvider } from "./archivedProvider";
 import { StorageProvider } from "./storageProvider";
 import { Container } from "../core/container";
+import { getPrMetaForPath } from "../commands/projectStatuses";
 import { l10n } from "vscode";
 
 export class Providers {
@@ -151,10 +152,25 @@ export class Providers {
     }
 
     public updateArchivedVisibility() {
-        const disabledCount = this.projectStorage.disabled()?.length || 0;
+        const disabled = this.projectStorage.disabled() || [];
+        const disabledCount = disabled.length;
         vscode.commands.executeCommand("setContext", "projectManager.canShowTreeViewArchived", disabledCount > 0);
         if (disabledCount > 0) {
             this.archivedTreeView.title = `Archived (${disabledCount})`;
+            let totalAdditions = 0, totalDeletions = 0, totalFiles = 0;
+            for (const p of disabled) {
+                const meta = getPrMetaForPath(p.rootPath);
+                if (meta) {
+                    totalAdditions += meta.additions;
+                    totalDeletions += meta.deletions;
+                    totalFiles += meta.changedFiles;
+                }
+            }
+            const fmt = (n: number) => n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
+            this.archivedTreeView.title = `Archived (${disabledCount})`;
+            this.archivedTreeView.description = (totalAdditions > 0 || totalDeletions > 0)
+                ? `+${fmt(totalAdditions)} -${fmt(totalDeletions)}`
+                : "";
         }
     }
 
