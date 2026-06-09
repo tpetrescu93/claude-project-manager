@@ -131,9 +131,12 @@ function applyStatusUpdate(
     if (newStatus !== oldStatus) {
         statusCache.set(rootPath, newStatus);
         changed = true;
-        if (newStatus === "merged" && oldStatus !== "merged") {
-            reactToMergedPr(rootPath).catch(() => { /* logged inside */ });
-        }
+    }
+    // Retry on every poll while merged + permalink exists — not just on first transition.
+    // (If slackAddReaction fails, oldStatus is already "merged" so the transition block
+    // above never fires again; this ensures the reaction is retried until it succeeds.)
+    if (newStatus === "merged") {
+        reactToMergedPr(rootPath).catch(() => { /* keep permalink, retry next poll */ });
     }
     if (newUrl !== oldUrl) {
         if (newUrl) {

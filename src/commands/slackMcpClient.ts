@@ -89,5 +89,5 @@ export async function slackAddReaction(permalink: string, reactionName: string):
     if (!m) { throw new Error(`Cannot parse Slack permalink: ${permalink}`); }
     const channel = m[1];
     const ts = `${m[2]}.${m[3]}`;
-    await callSlackTool("add_reaction", { channel, timestamp: ts, name: reactionName });
+    await callSlackTool("add_reaction", { channel_id: channel, ts, emoji: reactionName });
 }
