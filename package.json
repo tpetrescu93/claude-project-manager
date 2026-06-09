@@ -889,6 +889,11 @@
 					"group": "investigation"
 				},
 				{
+					"command": "_projectManager.copyProjectPath",
+					"when": "view == projectsExplorerFavorites && viewItem == InvestigationNodeKind",
+					"group": "investigation"
+				},
+				{
 					"command": "_projectManager.openTmuxSession",
 					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
 					"group": "inline@1"
