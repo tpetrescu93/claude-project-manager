@@ -51,9 +51,12 @@ async function askClaude() {
 
     const fullMessage = `${context}${prompt}`;
 
-    // Escape for tmux send-keys: wrap in single quotes, escape single quotes inside
+    // Use set-buffer + paste-buffer so \n in the message isn't interpreted as
+    // Enter keystrokes — send-keys sends each character individually and Claude's
+    // TUI would treat the embedded LFs as submissions. Paste-buffer delivers the
+    // content atomically, then we send Enter once to actually submit.
     const escaped = fullMessage.replace(/'/g, "'\\''");
-    await execAsync(`tmux send-keys -t "=${sessionName}:" '${escaped}' Enter`, { timeout: 5000 });
+    await execAsync(`tmux set-buffer -- '${escaped}' && tmux paste-buffer -t "=${sessionName}:" && tmux send-keys -t "=${sessionName}:" Enter`, { timeout: 5000 });
 }
 
 export function registerAskClaude() {
