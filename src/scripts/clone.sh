@@ -96,9 +96,12 @@ if [ -n "$SESSION_ID" ] && [ -n "$SESSION_SRC_DIR" ] && [ -n "$SESSION_DST_DIR" 
         fi
     fi
 
-    # Start tmux session resuming the copied Claude session
+    # Start tmux session resuming the copied Claude session.
+    # NOTE: no "=" in -s — that's exact-match syntax for -t TARGETS only; in -s it
+    # becomes part of the literal session name, orphaning the session from the
+    # "Open Tmux Session" attach (which then creates an empty duplicate).
     sessionName=$(basename "$TARGET_DIR" | tr '.' '-')
-    tmux new-session -d -s "=$sessionName" -c "$TARGET_DIR" \
+    tmux new-session -d -s "$sessionName" -c "$TARGET_DIR" \
         bash -lic "claude --resume $SESSION_ID --dangerously-skip-permissions" 2>/dev/null || true
 fi
 
