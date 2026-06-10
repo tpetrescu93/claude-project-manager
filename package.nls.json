@@ -63,7 +63,7 @@
     "projectManager.commands.deleteAllArchived.title": "Delete All Archived",
     "projectManager.commands.killArchivedTmux.title": "Kill Tmux Session",
     "projectManager.commands.killAllArchivedTmux.title": "Kill All Archived Tmux Sessions",
-    "projectManager.commands.deleteProject.title": "Delete Project",
+    "projectManager.commands.deleteProjectFromDisk.title": "Delete Project (Permanently)",
     "projectManager.commands.renameProject.title": "Rename Project",
     "projectManager.commands.editTags.title": "Edit Tags",
     "projectManager.commands.viewAsTags#sideBarFavorites.title": "View as Tags",

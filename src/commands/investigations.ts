@@ -8,6 +8,7 @@ import { Providers } from "../sidebar/providers";
 import { InvestigationNode } from "../sidebar/nodes";
 import { spawnDetachedClone } from "./cloneProject";
 import { run } from "./gitUtils";
+import { forgetTmuxAutoOpened } from "../utils/tmuxAutoOpen";
 import { latestSessionId, encodeProjectDir, copySessionWithCwdRewrite } from "./forkProject";
 import { getPinnedGitRepos } from "./gitPinning";
 
@@ -93,6 +94,16 @@ async function newInvestigation(projectStorage: ProjectStorage, providerManager:
     projectStorage.push(name, cwd, INVESTIGATION_KIND);
     projectStorage.save();
     providerManager.refreshStorageTreeView();
+
+    // Eagerly start a detached tmux session running Claude, so opening the
+    // investigation attaches to an already-warmed session instead of a bash prompt.
+    const sessionName = path.basename(cwd).replace(/\./g, "-");
+    try {
+        await run(
+            `tmux new-session -d -s ${shellQuote(sessionName)} -c ${shellQuote(cwd)} bash -lic ${shellQuote("claude --dangerously-skip-permissions; exec bash -l")} 2>/dev/null || true`,
+            cwd
+        );
+    } catch { /* tmux unavailable — opening will start it on demand */ }
 }
 
 async function openInvestigationTmux(arg: InvestigationNode | string, projectStorage: ProjectStorage) {
@@ -117,6 +128,7 @@ async function deleteInvestigation(arg: InvestigationNode | string, projectStora
     try { fs.rmSync(inv.rootPath, { recursive: true, force: true }); } catch { /* already gone */ }
     projectStorage.pop(inv.name);
     projectStorage.save();
+    forgetTmuxAutoOpened(inv.rootPath);
     providerManager.refreshStorageTreeView();
     window.showInformationMessage(l10n.t("Investigation \"{0}\" deleted.", inv.name));
 }
@@ -164,6 +176,7 @@ async function promoteInvestigation(arg: InvestigationNode | string, projectStor
     try { fs.rmSync(inv.rootPath, { recursive: true, force: true }); } catch { /* */ }
     projectStorage.pop(inv.name);
     projectStorage.save();
+    forgetTmuxAutoOpened(inv.rootPath);
     providerManager.refreshStorageTreeView();
 
     spawnDetachedClone({
@@ -216,8 +229,8 @@ async function forkInvestigation(arg: InvestigationNode | string, projectStorage
 
             const sessionName = path.basename(targetDir).replace(/\./g, "-");
             const claudeCmd = resumeId
-                ? `claude --resume ${resumeId} --dangerously-skip-permissions`
-                : `claude --dangerously-skip-permissions`;
+                ? `claude --resume ${resumeId} --dangerously-skip-permissions; exec bash -l`
+                : `claude --dangerously-skip-permissions; exec bash -l`;
             await run(
                 `tmux new-session -d -s ${shellQuote(sessionName)} -c ${shellQuote(targetDir)} bash -lic ${shellQuote(claudeCmd)} 2>/dev/null || true`,
                 targetDir

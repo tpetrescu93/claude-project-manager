@@ -5,11 +5,7 @@
 
 import fs = require("fs");
 import path = require("path");
-import { exec } from "child_process";
-import { promisify } from "util";
 import * as vscode from "vscode";
-
-const execAsync = promisify(exec);
 
 import { Locators } from "./autodetect/locators";
 import { ProjectStorage } from "./storage/storage";
@@ -86,18 +82,27 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // VS Code restores sidebar focus on workspace reload. Defocus it on activation
     // so the user lands in the editor group, not the project list.
-    // Auto-start tmux session if flagged by the previous host (no session existed).
-    const autoStart = context.globalState.get<{ rootPath: string; name: string }>("autoStartTmux");
-    if (autoStart) { context.globalState.update("autoStartTmux", undefined); }
+    // Auto-open the tmux tab the FIRST time a project is ever activated (any path:
+    // sidebar switch, File > Open Folder, or VS Code launching into it). A persistent
+    // per-project set records which we've done; once present, we never force it again.
+    const autoOpenProject = (() => {
+        const rootPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!rootPath) { return undefined; }
+        const opened = context.globalState.get<string[]>("tmuxAutoOpened", []);
+        if (opened.includes(rootPath)) { return undefined; }
+        context.globalState.update("tmuxAutoOpened", [ ...opened, rootPath ]);
+        const project = projectStorage.existsWithRootPath(rootPath);
+        return { rootPath, name: project?.name ?? path.basename(rootPath) };
+    })();
 
     const onActivationFocus = () => {
         const existing = vscode.window.terminals.find(t => t.name.startsWith(TMUX_TERMINAL_PREFIX));
         if (existing) {
             existing.show();
             vscode.commands.executeCommand("workbench.action.terminal.focus");
-        } else if (autoStart) {
+        } else if (autoOpenProject) {
             vscode.commands.executeCommand("_projectManager.openTmuxSession", {
-                preview: { path: autoStart.rootPath, name: autoStart.name }
+                preview: { path: autoOpenProject.rootPath, name: autoOpenProject.name }
             });
         } else {
             vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
@@ -138,17 +143,9 @@ export async function activate(context: vscode.ExtensionContext) {
         if (!await canSwitchOnActiveWindow(CommandLocation.SideBar)) {
             return;
         }
-        // Check if a tmux session already exists for this project. If not, set a
-        // one-shot flag so the new extension host (post-reload) auto-starts one.
-        // Done before openFolder since the reload kills this host immediately.
-        const sessionName = path.basename(projectPath).replace(/\./g, "-");
-        try {
-            await execAsync(`tmux has-session -t "=${sessionName}" 2>/dev/null`, { timeout: 3000 });
-            // Session exists — no auto-start needed.
-        } catch {
-            // No session — flag for auto-start on activation.
-            context.globalState.update("autoStartTmux", { rootPath: projectPath, name: projectName });
-        }
+        // The first-open tmux-tab auto-open is decided on the next host's activation
+        // (it reads the new workspace folder + the tmuxAutoOpened set directly), so
+        // nothing needs to be flagged here across the reload.
         vscode.commands.executeCommand("vscode.openFolder", uri, { forceProfile: profile , forceNewWindow: false } )
             .then(
                 () => ({}),  // done
@@ -191,7 +188,10 @@ export async function activate(context: vscode.ExtensionContext) {
         const sessionName = path.basename(rootPath).replace(/\./g, "-");
         // `=` forces exact-match: tmux -t otherwise prefix-matches, so a project whose
         // name is a prefix of another (e.g. foo vs foo-pt2) would attach to the wrong session.
-        const cmd = `tmux attach -t "=${sessionName}" 2>/dev/null || tmux new -s "${sessionName}"`;
+        // Attach to an existing session as-is; a freshly-created session auto-starts
+        // Claude, then drops to a login shell (-l sources ~/.bash_profile, so you get
+        // your normal prompt/profile) so quitting Claude doesn't kill the session.
+        const cmd = `tmux attach -t "=${sessionName}" 2>/dev/null || tmux new -s "${sessionName}" bash -lic 'claude --dangerously-skip-permissions; exec bash -l'`;
         const folders = vscode.workspace.workspaceFolders ?? [];
         const isCurrentWorkspace = folders.some(f => path.resolve(f.uri.fsPath) === path.resolve(rootPath));
 
@@ -234,7 +234,6 @@ export async function activate(context: vscode.ExtensionContext) {
     // new commands (ActivityBar)
     vscode.commands.registerCommand("projectManager.addToWorkspace#sideBar", (node) => addProjectToWorkspace(node));
     vscode.commands.registerCommand("projectManager.addToWorkspace", () => addProjectToWorkspace(undefined));
-    vscode.commands.registerCommand("_projectManager.deleteProject", (node) => deleteProject(node));
     vscode.commands.registerCommand("_projectManager.renameProject", (node) => renameProject(node));
     vscode.commands.registerCommand("_projectManager.editTags", (node) => editTags(node));
     vscode.commands.registerCommand("projectManager.addToFavorites", (node) => saveProject(node));
@@ -643,13 +642,6 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     }
 
-    function deleteProject(node: ProjectNode) {
-        Container.stack.pop(node.command.arguments[1]);
-        projectStorage.pop(node.command.arguments[1]);
-        projectStorage.save();
-        providerManager.updateTreeViewStorage();
-        vscode.window.showInformationMessage(l10n.t("Project successfully deleted!"));
-    }
 
     function renameProject(node: ProjectNode) {
         const oldName: string = node.command.arguments[1];

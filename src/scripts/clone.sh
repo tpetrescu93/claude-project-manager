@@ -102,7 +102,7 @@ if [ -n "$SESSION_ID" ] && [ -n "$SESSION_SRC_DIR" ] && [ -n "$SESSION_DST_DIR" 
     # "Open Tmux Session" attach (which then creates an empty duplicate).
     sessionName=$(basename "$TARGET_DIR" | tr '.' '-')
     tmux new-session -d -s "$sessionName" -c "$TARGET_DIR" \
-        bash -lic "claude --resume $SESSION_ID --dangerously-skip-permissions" 2>/dev/null || true
+        bash -lic "claude --resume $SESSION_ID --dangerously-skip-permissions; exec bash -l" 2>/dev/null || true
 fi
 
 # 7. Kill investigation tmux session (promote only)

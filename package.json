@@ -336,10 +336,6 @@
 				"title": "%projectManager.commands.addToWorkspace.title%"
 			},
 			{
-				"command": "_projectManager.deleteProject",
-				"title": "%projectManager.commands.deleteProject.title%"
-			},
-			{
 				"command": "_projectManager.renameProject",
 				"title": "%projectManager.commands.renameProject.title%"
 			},
@@ -440,6 +436,11 @@
 			{
 				"command": "_projectManager.deleteArchivedProject",
 				"title": "%projectManager.commands.deleteArchivedProject.title%",
+				"icon": "$(trash)"
+			},
+			{
+				"command": "_projectManager.deleteProjectFromDisk",
+				"title": "%projectManager.commands.deleteProjectFromDisk.title%",
 				"icon": "$(trash)"
 			},
 			{
@@ -586,10 +587,6 @@
 				},
 				{
 					"command": "_projectManager.killAllArchivedTmux",
-					"when": "false"
-				},
-				{
-					"command": "_projectManager.deleteProject",
 					"when": "false"
 				},
 				{
@@ -960,6 +957,11 @@
 				},
 				{
 					"command": "_projectManager.renameProject",
+					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
+					"group": "favorites"
+				},
+				{
+					"command": "_projectManager.deleteProjectFromDisk",
 					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
 					"group": "favorites"
 				},

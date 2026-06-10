@@ -8,6 +8,7 @@ import { Providers } from "../sidebar/providers";
 import { ProjectNode, ArchivedProjectNode, InvestigationNode } from "../sidebar/nodes";
 import { getPrStatusForPath, getPrMetaForPath } from "./projectStatuses";
 import { findDoneTransitions, transitionIssue, assignIssueToCurrentUser } from "./jiraClient";
+import { forgetTmuxAutoOpened } from "../utils/tmuxAutoOpen";
 
 
 const execAsync = promisify(exec);
@@ -111,6 +112,7 @@ async function deleteArchivedProject(node: ArchivedProjectNode, projectStorage: 
     // Remove PM entry
     projectStorage.pop(projectName);
     projectStorage.save();
+    forgetTmuxAutoOpened(projectPath);
 
     // Delete folder from disk
     try {
@@ -120,6 +122,39 @@ async function deleteArchivedProject(node: ArchivedProjectNode, projectStorage: 
     }
 
     // Kill tmux session if still around
+    await killTmuxSession(sessionNameFor(projectPath));
+
+    providerManager.refreshStorageTreeView();
+    window.showInformationMessage(l10n.t("Project \"{0}\" deleted.", projectName));
+}
+
+async function deleteProject(node: ProjectNode, projectStorage: ProjectStorage, providerManager: Providers) {
+    const projectName = node.preview.name;
+    const projectPath = node.preview.path;
+
+    if (isProjectOpenInCurrentWindow(projectPath)) {
+        window.showWarningMessage(l10n.t("Cannot delete \"{0}\" — it is open in this window. Close it first.", projectName));
+        return;
+    }
+
+    const confirm = await window.showWarningMessage(
+        l10n.t("Delete \"{0}\" and remove its folder from disk? This cannot be undone.", projectName),
+        { modal: true },
+        l10n.t("Delete")
+    );
+
+    if (!confirm) { return; }
+
+    projectStorage.pop(projectName);
+    projectStorage.save();
+    forgetTmuxAutoOpened(projectPath);
+
+    try {
+        await execAsync(`rm -rf "${projectPath}"`);
+    } catch {
+        // Folder may already be gone
+    }
+
     await killTmuxSession(sessionNameFor(projectPath));
 
     providerManager.refreshStorageTreeView();
@@ -174,6 +209,7 @@ async function deleteAllArchived(projectStorage: ProjectStorage, providerManager
         }
         await killTmuxSession(sessionNameFor(project.rootPath));
         projectStorage.pop(project.name);
+        forgetTmuxAutoOpened(project.rootPath);
     }
 
     projectStorage.save();
@@ -189,6 +225,8 @@ export function registerArchiveCommands(projectStorage: ProjectStorage, provider
             (node: ArchivedProjectNode) => restoreProject(node, projectStorage, providerManager)),
         commands.registerCommand("_projectManager.deleteArchivedProject",
             (node: ArchivedProjectNode) => deleteArchivedProject(node, projectStorage, providerManager)),
+        commands.registerCommand("_projectManager.deleteProjectFromDisk",
+            (node: ProjectNode) => deleteProject(node, projectStorage, providerManager)),
         commands.registerCommand("_projectManager.deleteAllArchived",
             () => deleteAllArchived(projectStorage, providerManager)),
         commands.registerCommand("_projectManager.killArchivedTmux",
