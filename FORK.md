@@ -149,15 +149,16 @@ Within a rank: alphabetical by label. When sort=Status is active, polling does a
 
 ### Clone-to-new-branch
 Right-click a project → "Clone to New Project". Input box for branch name (stores just the branch — the folder is `<repo>-<branch>` by convention, but `name` in `projects.json` is just the branch). Steps:
-1. `git clone <sourcePath> <targetDir>` — local hardlink clone (~2.4s for paydays-api vs ~11.5s for rsync).
-2. `git fetch origin` + detect canonical default branch (`origin/HEAD` → fallback to `main`/`master`/`develop`) → `git reset --hard origin/<default>` so the new branch always starts up-to-date regardless of what the source had checked out.
+1. `git clone <sourcePath> <targetDir>` — local hardlink clone (~2.4s for paydays-api vs ~11.5s for rsync). Cheap because it shares the source's objects; the new branch is rebased onto fresh upstream immediately after.
+2. **Reset to the up-to-date upstream default branch.** Repoint `origin` to the real upstream URL *first*, then resolve the canonical default from the **upstream's** HEAD symref (`git ls-remote --symref <upstream> HEAD`), `git fetch origin <default>`, and `git checkout -B <default> origin/<default>`. Offline / unset-remote-HEAD fallback: pick `main`/`master`/`develop` by local existence (never the source's checked-out branch) and reset to the local `origin/<default>`.
 3. `git checkout -b <branch>`.
 4. Symlink `.venv`: if source has a symlink `.venv` → `cp -P` (copy the symlink itself); if source has a real `.venv` dir → `ln -s`. Either way instant — no `uv sync` needed for same-deps branches.
 5. If `yarn.lock` or `package-lock.json` exists → `bun install && rm -f bun.lock bun.lockb`.
-6. `git remote set-url origin <upstream>` replaces the local-path origin (local `git clone` sets `origin` to the source folder path, not the GitHub remote, which breaks tools like `gpr` that parse the remote URL).
-7. Detect `repoName` from the corrected upstream URL and store just the branch in `projects.json` (strip `<repo>-` prefix if present).
+6. Detect `repoName` from the (already-repointed) upstream URL and store just the branch in `projects.json` (strip `<repo>-` prefix if present).
 
-**Benchmark (paydays-api):** local clone 2.4s, fetch+reset 5.9s → ~8s total vs ~17.5s with the old rsync approach.
+**Why step 2 resolves the default from the *upstream*, not the local clone.** A local `git clone <folder>` sets the new repo's `origin/HEAD` to mirror whatever branch the **source had checked out** — so the previous approach (`git symbolic-ref refs/remotes/origin/HEAD`) resolved to the source's *feature* branch, and `git reset --hard origin/<that>` reset against the source's **stale local ref**. Net effect: a clone/fork silently inherited the source's entire checked-out branch (its feature commits, or a behind-by-N default) instead of starting from real master. Fixed by asking the upstream what its default branch is and fetching it fresh — verified end-to-end (source on a feature branch with stale local master → fork lands on fresh upstream master, feature commit dropped). One extra upstream round-trip (~0.7–2s, see benchmark), gated behind the offline fallback so a clone never *fails* without network.
+
+**Benchmark (paydays-api):** `git fetch origin master` ≈ 0.65s warm / ~2s when new objects exist; local clone ~2.4s.
 
 **Known gotcha (fixed):** a bug caused the pending JSON to never be written — `mkdir -p "$(dirname 'quoted/path')"` included the single quotes in the dirname (from `shellQuote`), so `printf > pendingFile` silently failed and the project was registered by the migration with `repoName = path.basename(sourcePath)` (wrong). Fixed by computing `path.dirname` in TypeScript and shell-quoting separately. This whole class of quoting bug was then eliminated by the script-file refactor below.
 
@@ -175,7 +176,7 @@ The pending file approach (rather than writing directly to `projects.json`) is d
 ### Fork Project + Claude Session
 Right-click a project that has a Claude session → "Fork Project + Claude Session...". Clones it to a new folder/branch (reusing the clone flow) AND carries the Claude conversation across so a new agent resumes where the old one left off, then diverges.
 
-- **Git state is intentionally discarded.** The fork always starts from the default branch (fetched fresh from origin), regardless of what branch or dirty state the source project was on. The only thing carried across is the Claude session — that's the entire point of fork. The source's git state is irrelevant.
+- **Git state is intentionally discarded.** The fork starts from the up-to-date upstream default branch (see Clone step 2), regardless of what branch or dirty state the source was on — the source's feature-branch commits and working-tree changes are dropped. The only thing carried across is the Claude session — that's the entire point of fork. (This relies on step 2 resolving the *upstream's* default; an earlier version mis-resolved it to the source's checked-out branch and silently carried that branch's commits into the fork — fixed.)
 - **Name prompt** is prefilled with the source project's name, pre-selected for editing; the edited value becomes both the new folder name and the git branch (matches the folder≈branch convention). Blocks if left identical to the source.
 - **Session copy**: finds the source's newest transcript in `~/.claude/projects/<encoded-source-cwd>/`, copies it (and the subagent dir, recursively, best-effort, skipping non-regular files like IPC sockets) into `~/.claude/projects/<encoded-new-cwd>/`, **rewriting every entry's `cwd`** to the new path via `jq` — same mechanism as the `move` skill. Without the rewrite, `--resume` stays pinned to the source folder.
 - **Resume**: the detached bash script starts `claude --resume <session-id>` in a detached tmux session after the clone completes. Switching to the fork and "Open Tmux Session" attaches to the already-running resumed session.

@@ -45,17 +45,40 @@ echo "=== clone started $(date) ==="
 # 1. Local git clone — hardlinks .git objects, ~5x faster than rsync
 git clone "$SOURCE_PATH" "$TARGET_DIR"
 
-# 2. Fetch + reset to canonical default branch so we're always up to date
+# 2. Reset to the canonical default branch's UP-TO-DATE upstream tip.
+#
+# The local clone above sets origin to the SOURCE folder, and its origin/HEAD
+# mirrors whatever branch the source had checked out — so the old approach
+# (git symbolic-ref refs/remotes/origin/HEAD) resolved to the source's feature
+# branch, not the repo's real default, and reset to the source's stale local
+# ref. Instead: repoint origin to the real upstream FIRST, ask the upstream what
+# its default branch actually is (HEAD symref), fetch that, and reset to it.
 cd "$TARGET_DIR"
-git fetch origin
-defaultBranch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || true)
+_upstreamUrl=$(git -C "$SOURCE_PATH" remote get-url origin 2>/dev/null || echo "")
+
+defaultBranch=""
+if [ -n "$_upstreamUrl" ]; then
+    git remote set-url origin "$_upstreamUrl"
+    # Canonical default = the upstream's HEAD symref (main vs master, per GitHub).
+    defaultBranch=$(git ls-remote --symref "$_upstreamUrl" HEAD 2>/dev/null \
+        | sed -n 's#^ref: refs/heads/\([^[:space:]]*\).*#\1#p')
+    if [ -n "$defaultBranch" ] && git fetch origin "$defaultBranch" 2>/dev/null; then
+        git checkout -B "$defaultBranch" "origin/$defaultBranch"
+    else
+        defaultBranch=""   # detection/fetch failed — fall through to local fallback
+    fi
+fi
+
+# Fallback (no upstream / offline / unset remote HEAD): pick a sane default that
+# exists locally — explicitly NOT the source's checked-out branch.
 if [ -z "$defaultBranch" ]; then
+    git fetch origin 2>/dev/null || true
     for b in main master develop; do
         if git rev-parse --verify "origin/$b" >/dev/null 2>&1; then defaultBranch="$b"; break; fi
     done
+    git checkout -f "$defaultBranch"
+    git reset --hard "origin/$defaultBranch"
 fi
-git checkout -f "$defaultBranch"
-git reset --hard "origin/$defaultBranch"
 
 # 3. Create new branch
 git checkout -b "$BRANCH_NAME"
@@ -110,11 +133,8 @@ if [ -n "$INV_SESSION_TO_KILL" ]; then
     tmux kill-session -t "=$INV_SESSION_TO_KILL" 2>/dev/null || true
 fi
 
-# 8. Fix origin to point at the real upstream URL
-_upstreamUrl=$(git -C "$SOURCE_PATH" remote get-url origin 2>/dev/null || echo "")
-if [ -n "$_upstreamUrl" ]; then git remote set-url origin "$_upstreamUrl"; fi
-
-# 9. Detect repo name from upstream remote URL
+# 8. Detect repo name from the upstream remote URL (origin was already repointed
+#    to upstream in step 2).
 _repoUrl=$(git remote get-url origin 2>/dev/null || echo "")
 _repoName=$(echo "$_repoUrl" | sed -E 's|.*[:/][^/]+/([^/.]+)(\.git)?[[:space:]]*$|\1|')
 
@@ -127,7 +147,7 @@ if [ -n "$_repoName" ]; then
     esac
 fi
 
-# 10. Write pending file — signals the extension that the project is ready
+# 9. Write pending file — signals the extension that the project is ready
 mkdir -p "$(dirname "$PENDING_FILE")"
 if [ -n "$KIND" ]; then
     printf '{"name":"%s","rootPath":"%s","repoName":"%s","kind":"%s"}' \
