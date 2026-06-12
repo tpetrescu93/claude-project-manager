@@ -133,30 +133,63 @@ async function copyTreeWithCwdRewrite(srcDir: string, dstDir: string, targetPath
 }
 
 
-async function doFork(sourcePath: string, sourceName: string, repoName: string | undefined) {
+/**
+ * Suggest the next fork name: bump a trailing `-ptN` (e.g. foo-pt2 → foo-pt3),
+ * or append `-pt2` when there's no such suffix — the unsuffixed original is
+ * implicitly pt1, so its first fork is pt2 (foo → foo-pt2).
+ */
+export function suggestForkName(sourceName: string): string {
+    const m = sourceName.match(/^(.*)-pt(\d+)$/);
+    if (m) { return `${m[1]}-pt${parseInt(m[2], 10) + 1}`; }
+    return `${sourceName}-pt2`;
+}
+
+function forkFolderName(branchName: string, repoName: string | undefined): string {
+    return repoName ? `${repoName}-${branchName}` : branchName;
+}
+
+/**
+ * Next fork name that doesn't collide with an existing folder or projects.json
+ * entry — keeps bumping the `-ptN` suffix until a free slot is found.
+ */
+function nextFreeForkName(sourceName: string, sourcePath: string, repoName: string | undefined, projectStorage: ProjectStorage): string {
+    const parentDir = path.dirname(sourcePath);
+    const taken = (branch: string): boolean =>
+        fs.existsSync(path.join(parentDir, forkFolderName(branch, repoName))) ||
+        projectStorage.getAll().some(p => p.name === branch);
+
+    let candidate = suggestForkName(sourceName);
+    while (taken(candidate)) { candidate = suggestForkName(candidate); }
+    return candidate;
+}
+
+async function doFork(sourcePath: string, sourceName: string, repoName: string | undefined, projectStorage: ProjectStorage, prompt: boolean) {
     const sessionId = latestSessionId(sourcePath);
     if (!sessionId) {
         window.showWarningMessage(l10n.t("No Claude session found for this project to fork. Use \"Clone to New Project\" for a plain clone."));
         return;
     }
 
-    const input = await window.showInputBox({
-        prompt: l10n.t("New branch name"),
-        value: sourceName,
-        valueSelection: [ 0, sourceName.length ],
-        validateInput: (value) => {
-            const base = validateBranchName(value);
-            if (base) { return base; }
-            if (value.trim() === sourceName) {
-                return l10n.t("Choose a different name from the source project.");
+    let newName = nextFreeForkName(sourceName, sourcePath, repoName, projectStorage);
+    if (prompt) {
+        const input = await window.showInputBox({
+            prompt: l10n.t("New branch name"),
+            value: newName,
+            valueSelection: [ 0, newName.length ],
+            validateInput: (value) => {
+                const base = validateBranchName(value);
+                if (base) { return base; }
+                if (value.trim() === sourceName) {
+                    return l10n.t("Choose a different name from the source project.");
+                }
+                return undefined;
             }
-            return undefined;
-        }
-    });
-    if (!input) { return; }
-    const newName = input.trim();
+        });
+        if (!input) { return; }
+        newName = input.trim();
+    }
 
-    const folderName = repoName ? `${repoName}-${newName}` : newName;
+    const folderName = forkFolderName(newName, repoName);
     const targetDir = path.join(path.dirname(sourcePath), folderName);
     const pendingId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
     const sessionSrcDir = path.join(CLAUDE_PROJECTS_DIR, encodeProjectDir(sourcePath));
@@ -171,23 +204,24 @@ async function doFork(sourcePath: string, sourceName: string, repoName: string |
     );
 }
 
-async function forkProject(node: ProjectNode, projectStorage: ProjectStorage) {
+async function forkProject(node: ProjectNode, projectStorage: ProjectStorage, prompt: boolean) {
     const sourcePath = node.preview.path;
     const sourceProject = projectStorage.getAll().find(
         p => path.resolve(p.rootPath) === path.resolve(sourcePath)
     );
     const sourceName = sourceProject?.name ?? path.basename(sourcePath);
-    await doFork(sourcePath, sourceName, sourceProject?.repoName);
+    await doFork(sourcePath, sourceName, sourceProject?.repoName, projectStorage, prompt);
 }
 
-async function forkArchivedProject(node: import("../sidebar/nodes").ArchivedProjectNode) {
+async function forkArchivedProject(node: import("../sidebar/nodes").ArchivedProjectNode, projectStorage: ProjectStorage) {
     const sourcePath = node.preview.path;
-    await doFork(sourcePath, node.preview.name, undefined);
+    await doFork(sourcePath, node.preview.name, undefined, projectStorage, false);
 }
 
 export function registerForkProject(projectStorage: ProjectStorage) {
     Container.context.subscriptions.push(
-        commands.registerCommand("_projectManager.forkProject", (node: ProjectNode) => forkProject(node, projectStorage)),
-        commands.registerCommand("_projectManager.forkArchivedProject", (node: import("../sidebar/nodes").ArchivedProjectNode) => forkArchivedProject(node)),
+        commands.registerCommand("_projectManager.forkProject", (node: ProjectNode) => forkProject(node, projectStorage, false)),
+        commands.registerCommand("_projectManager.forkProjectAs", (node: ProjectNode) => forkProject(node, projectStorage, true)),
+        commands.registerCommand("_projectManager.forkArchivedProject", (node: import("../sidebar/nodes").ArchivedProjectNode) => forkArchivedProject(node, projectStorage)),
     );
 }

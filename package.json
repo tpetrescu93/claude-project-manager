@@ -395,6 +395,11 @@
 				"icon": "$(git-branch)"
 			},
 			{
+				"command": "_projectManager.forkProjectAs",
+				"title": "%projectManager.commands.forkProjectAs.title%",
+				"icon": "$(git-branch)"
+			},
+			{
 				"command": "_projectManager.newInvestigation",
 				"title": "%projectManager.commands.newInvestigation.title%",
 				"icon": "$(add)"
@@ -941,6 +946,11 @@
 					"group": "favorites"
 				},
 				{
+					"command": "_projectManager.forkProjectAs",
+					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind",
+					"group": "favorites"
+				},
+				{
 					"command": "_projectManager.attachSlackPost",
 					"when": "view == projectsExplorerFavorites && viewItem == ProjectNodeKind && config.projectManager.slackChannelId != ''",
 					"group": "slack"
@@ -1017,6 +1027,11 @@
 				},
 				{
 					"command": "_projectManager.forkProject",
+					"when": "view == projectsExplorerGit && viewItem =~ /^ProjectNodeKind/",
+					"group": "favorites"
+				},
+				{
+					"command": "_projectManager.forkProjectAs",
 					"when": "view == projectsExplorerGit && viewItem =~ /^ProjectNodeKind/",
 					"group": "favorites"
 				},
