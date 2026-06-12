@@ -124,8 +124,15 @@ if [ -n "$SESSION_ID" ] && [ -n "$SESSION_SRC_DIR" ] && [ -n "$SESSION_DST_DIR" 
     # becomes part of the literal session name, orphaning the session from the
     # "Open Tmux Session" attach (which then creates an empty duplicate).
     sessionName=$(basename "$TARGET_DIR" | tr '.' '-')
+    # Inject a one-time orienting prompt on resume: the conversation happened in
+    # the source folder with its own branch/uncommitted work, but the fork is a
+    # clean checkout on a fresh branch off latest default — tell Claude so it
+    # doesn't try to recreate the prior git state, and park it. Passed as the
+    # positional [prompt] arg (interactive resume submits it as the first turn).
+    # Single-quoted in the -c string, so the message must contain no single quotes.
+    PARK_MSG='Heads up: this is a forked session. The working directory is now a fresh clone on a new branch cut from the latest default branch, so any uncommitted changes or commits from earlier in this conversation are NOT present here. This is expected and nothing is broken. Do not try to recreate that prior state. Await my next instruction.'
     tmux new-session -d -s "$sessionName" -c "$TARGET_DIR" \
-        bash -lic "claude --resume $SESSION_ID --dangerously-skip-permissions; exec bash -l" 2>/dev/null || true
+        bash -lic "claude --resume $SESSION_ID --dangerously-skip-permissions '$PARK_MSG'; exec bash -l" 2>/dev/null || true
 fi
 
 # 7. Kill investigation tmux session (promote only)
