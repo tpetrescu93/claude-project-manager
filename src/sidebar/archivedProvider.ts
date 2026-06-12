@@ -4,7 +4,12 @@ import { PathUtils } from "../utils/path";
 import { ArchivedProjectNode } from "./nodes";
 import { buildProjectTooltip } from "../commands/projectTooltip";
 
-export class ArchivedProvider implements vscode.TreeDataProvider<ArchivedProjectNode> {
+export class ArchivedProvider implements vscode.TreeDataProvider<ArchivedProjectNode>, vscode.TreeDragAndDropController<ArchivedProjectNode> {
+
+    private static readonly DRAG_MIME_TYPE = "application/vnd.code.tree.projectsExplorerArchived";
+
+    public readonly dropMimeTypes: readonly string[] = [ ArchivedProvider.DRAG_MIME_TYPE ];
+    public readonly dragMimeTypes: readonly string[] = [ ArchivedProvider.DRAG_MIME_TYPE ];
 
     public readonly onDidChangeTreeData: vscode.Event<ArchivedProjectNode | void>;
 
@@ -18,6 +23,25 @@ export class ArchivedProvider implements vscode.TreeDataProvider<ArchivedProject
 
     public refresh(): void {
         this.internalOnDidChangeTreeData.fire();
+    }
+
+    public handleDrag(source: readonly ArchivedProjectNode[], dataTransfer: vscode.DataTransfer): void {
+        if (source.length === 0) { return; }
+        dataTransfer.set(ArchivedProvider.DRAG_MIME_TYPE,
+            new vscode.DataTransferItem(source.map(n => n.preview.path)));
+    }
+
+    public async handleDrop(target: ArchivedProjectNode | undefined, dataTransfer: vscode.DataTransfer): Promise<void> {
+        if (!target) { return; }
+        const transferItem = dataTransfer.get(ArchivedProvider.DRAG_MIME_TYPE);
+        if (!transferItem) { return; }
+        const sourcePaths: string[] = transferItem.value;
+        if (!sourcePaths || sourcePaths.length === 0) { return; }
+
+        // moveProject reorders the global projects array by rootPath; the archived
+        // view is a filtered slice of it, so this reorders archived rows directly.
+        this.projectSource.moveProject(sourcePaths[ 0 ], target.preview.path);
+        this.refresh();
     }
 
     public async search(): Promise<void> {

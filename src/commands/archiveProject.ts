@@ -48,8 +48,10 @@ async function archiveProject(node: ProjectNode | InvestigationNode, projectStor
     const session = sessionNameFor(rootPath);
     await killTmuxSession(session);
 
-    // Disable the project
+    // Disable the project and float it to the top so the most recently archived
+    // appears first in the Archived view (until manually reordered via drag).
     projectStorage.toggleEnabled(projectName);
+    projectStorage.moveToTop(projectName);
     projectStorage.save();
     providerManager.refreshStorageTreeView();
 

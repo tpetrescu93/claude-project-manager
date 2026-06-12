@@ -54,6 +54,7 @@ export class Providers {
         });
         this.archivedTreeView = vscode.window.createTreeView("projectsExplorerArchived", {
             treeDataProvider: this.archivedProvider,
+            dragAndDropController: this.archivedProvider,
             showCollapseAll: false
         });
 

@@ -191,6 +191,13 @@ export class ProjectStorage {
         }
     }
 
+    public moveToTop(name: string): void {
+        const index = this.projects.findIndex(p => p.name === name);
+        if (index <= 0) { return; }
+        const [ project ] = this.projects.splice(index, 1);
+        this.projects.unshift(project);
+    }
+
     public moveProject(fromRootPath: string, toRootPath: string): void {
         const fromIndex = this.projects.findIndex(p =>
             PathUtils.expandHomePath(p.rootPath).toLowerCase() === fromRootPath.toLowerCase());

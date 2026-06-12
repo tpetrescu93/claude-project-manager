@@ -1046,6 +1046,11 @@
 					"group": "inline@3"
 				},
 				{
+					"command": "_projectManager.openTmuxSession",
+					"when": "view == projectsExplorerArchived && viewItem == ArchivedProjectNodeKind",
+					"group": "archive"
+				},
+				{
 					"command": "_projectManager.forkArchivedProject",
 					"when": "view == projectsExplorerArchived && viewItem == ArchivedProjectNodeKind",
 					"group": "archive"

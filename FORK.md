@@ -202,7 +202,9 @@ Inline buttons on an investigation row: `$(terminal)` Open Tmux, `$(rocket)` Pro
 Right-click → Archive moves an entry to a hidden "Archived" tree under Projects. Archive also kills the project's tmux session inline (`tmux kill-session -t "<name>" 2>/dev/null`, name = `basename(rootPath).replace(/\./g, "-")`). Archived rows have:
 - Click-to-switch: opens the project, same as Favorites and Git.
 - Inline buttons on hover: `$(discard)` Restore, `$(circle-slash)` Kill Tmux, `$(trash)` Delete (`inline@1` / `@2` / `@3`).
-- Right-click menu mirrors the same three actions.
+- Right-click menu mirrors those three plus **Open Tmux Session** (reuses `_projectManager.openTmuxSession` — the archived node already carries `preview.path`/`preview.name`; since an archived project isn't the current workspace it opens in a floating window, and as archiving killed the session it starts fresh).
+
+**Ordering + drag-reorder.** The Archived view is a `TreeDragAndDropController` (MIME `application/vnd.code.tree.projectsExplorerArchived`) — drag a row onto another to reorder, persisted via the same `projectStorage.moveProject` → `projects.json` mechanism as Favorites (the archived list is just the `disabled()` slice of the global array, so reordering the array reorders the view). Newly archived projects float to the **top**: archive calls `projectStorage.moveToTop(name)` (unshift in the global array) so the most recent is first until manually dragged. Favorites ordering is unaffected — moving a disabled entry doesn't change the relative order of enabled ones.
 
 View-title buttons on the Archived view: `$(search)` Search (opens a `createQuickPick` popup with all archived projects; type to fuzzy-filter by label or path; selecting an item opens the project directly), `$(circle-slash)` "Kill All Archived Tmux Sessions", and `$(trash)` "Delete All Archived". Both iterate/kill/delete the full disabled list and report a count.
 
