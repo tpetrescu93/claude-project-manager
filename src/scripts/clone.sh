@@ -96,8 +96,15 @@ if [ -f yarn.lock ] || [ -f package-lock.json ]; then
     bun install && rm -f bun.lock bun.lockb || true
 fi
 
-# 6. Copy Claude session (cwd-rewritten so --resume operates in the new folder)
+# 6. Eagerly start a primed Claude tmux session so opening the project later just
+#    attaches to an already-booted Claude (same as fork). Fork/promote carry the
+#    source conversation across and resume it; a plain clone starts a fresh Claude.
+# NOTE: no "=" in -s — that's exact-match syntax for -t TARGETS only; in -s it
+# becomes part of the literal session name, orphaning the session from the
+# "Open Tmux Session" attach (which then creates an empty duplicate).
+sessionName=$(basename "$TARGET_DIR" | tr '.' '-')
 if [ -n "$SESSION_ID" ] && [ -n "$SESSION_SRC_DIR" ] && [ -n "$SESSION_DST_DIR" ]; then
+    # Copy the source transcript (cwd-rewritten so --resume operates here).
     mkdir -p "$SESSION_DST_DIR"
     srcJsonl="$SESSION_SRC_DIR/$SESSION_ID.jsonl"
     dstJsonl="$SESSION_DST_DIR/$SESSION_ID.jsonl"
@@ -118,22 +125,20 @@ if [ -n "$SESSION_ID" ] && [ -n "$SESSION_SRC_DIR" ] && [ -n "$SESSION_DST_DIR" 
             done
         fi
     fi
-
-    # Start tmux session resuming the copied Claude session.
-    # NOTE: no "=" in -s — that's exact-match syntax for -t TARGETS only; in -s it
-    # becomes part of the literal session name, orphaning the session from the
-    # "Open Tmux Session" attach (which then creates an empty duplicate).
-    sessionName=$(basename "$TARGET_DIR" | tr '.' '-')
-    # Inject a one-time orienting prompt on resume: the conversation happened in
-    # the source folder with its own branch/uncommitted work, but the fork is a
-    # clean checkout on a fresh branch off latest default — tell Claude so it
-    # doesn't try to recreate the prior git state, and park it. Passed as the
-    # positional [prompt] arg (interactive resume submits it as the first turn).
-    # Single-quoted in the -c string, so the message must contain no single quotes.
+    # Resume with a one-time orienting prompt: the conversation happened in the
+    # source folder with its own branch/uncommitted work, but this is a clean
+    # checkout on a fresh branch off latest default — tell Claude so it doesn't
+    # recreate the prior git state, and park it. Passed as the positional [prompt]
+    # arg (interactive resume submits it as the first turn). Single-quoted in the
+    # -c string, so the message must contain no single quotes.
     PARK_MSG='Heads up: this is a forked session. The working directory is now a fresh clone on a new branch cut from the latest default branch, so any uncommitted changes or commits from earlier in this conversation are NOT present here. This is expected and nothing is broken. Do not try to recreate that prior state. Await my next instruction.'
-    tmux new-session -d -s "$sessionName" -c "$TARGET_DIR" \
-        bash -lic "claude --resume $SESSION_ID --dangerously-skip-permissions '$PARK_MSG'; exec bash -l" 2>/dev/null || true
+    claudeCmd="claude --resume $SESSION_ID --dangerously-skip-permissions '$PARK_MSG'"
+else
+    # Plain clone: no conversation to carry — start a fresh Claude.
+    claudeCmd="claude --dangerously-skip-permissions"
 fi
+tmux new-session -d -s "$sessionName" -c "$TARGET_DIR" \
+    bash -lic "$claudeCmd; exec bash -l" 2>/dev/null || true
 
 # 7. Kill investigation tmux session (promote only)
 if [ -n "$INV_SESSION_TO_KILL" ]; then
