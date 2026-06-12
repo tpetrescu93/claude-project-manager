@@ -130,14 +130,32 @@ async function deleteArchivedProject(node: ArchivedProjectNode, projectStorage: 
     window.showInformationMessage(l10n.t("Project \"{0}\" deleted.", projectName));
 }
 
+const PENDING_DELETE_KEY = "pendingProjectDelete";
+
+async function removeProjectFromDisk(projectName: string, projectPath: string, projectStorage: ProjectStorage, providerManager: Providers) {
+    projectStorage.pop(projectName);
+    projectStorage.save();
+    forgetTmuxAutoOpened(projectPath);
+    try {
+        await execAsync(`rm -rf "${projectPath}"`);
+    } catch {
+        // Folder may already be gone
+    }
+    await killTmuxSession(sessionNameFor(projectPath));
+    providerManager.refreshStorageTreeView();
+    window.showInformationMessage(l10n.t("Project \"{0}\" deleted.", projectName));
+}
+
+/**
+ * Deleting the open project can't `rm -rf` its folder while it's the workspace,
+ * and switching away reloads the extension host — so the actual removal is
+ * deferred: this records the intent in globalState and the next activation
+ * finishes it (see completePendingProjectDelete). Crash-safe: the flag persists
+ * on disk, so the delete completes on the next launch even if interrupted.
+ */
 async function deleteProject(node: ProjectNode, projectStorage: ProjectStorage, providerManager: Providers) {
     const projectName = node.preview.name;
     const projectPath = node.preview.path;
-
-    if (isProjectOpenInCurrentWindow(projectPath)) {
-        window.showWarningMessage(l10n.t("Cannot delete \"{0}\" — it is open in this window. Close it first.", projectName));
-        return;
-    }
 
     const confirm = await window.showWarningMessage(
         l10n.t("Delete \"{0}\" and remove its folder from disk? This cannot be undone.", projectName),
@@ -147,20 +165,31 @@ async function deleteProject(node: ProjectNode, projectStorage: ProjectStorage, 
 
     if (!confirm) { return; }
 
-    projectStorage.pop(projectName);
-    projectStorage.save();
-    forgetTmuxAutoOpened(projectPath);
-
-    try {
-        await execAsync(`rm -rf "${projectPath}"`);
-    } catch {
-        // Folder may already be gone
+    if (isProjectOpenInCurrentWindow(projectPath)) {
+        // Defer: close the folder (reloads into an empty window) and let the next
+        // activation do the removal, since we can't delete the open workspace dir.
+        await Container.context.globalState.update(PENDING_DELETE_KEY, { name: projectName, rootPath: projectPath });
+        await commands.executeCommand("workbench.action.closeFolder");
+        return;
     }
 
-    await killTmuxSession(sessionNameFor(projectPath));
+    await removeProjectFromDisk(projectName, projectPath, projectStorage, providerManager);
+}
 
-    providerManager.refreshStorageTreeView();
-    window.showInformationMessage(l10n.t("Project \"{0}\" deleted.", projectName));
+/**
+ * Runs on activation: if a project deletion was deferred (its folder was the open
+ * workspace), and we're no longer in that folder, finish it. Clears the flag
+ * BEFORE deleting so a mid-delete crash doesn't loop-retry on every launch.
+ */
+async function completePendingProjectDelete(projectStorage: ProjectStorage, providerManager: Providers) {
+    const pending = Container.context.globalState.get<{ name: string; rootPath: string }>(PENDING_DELETE_KEY);
+    if (!pending) { return; }
+    if (isProjectOpenInCurrentWindow(pending.rootPath)) { return; }  // still in it — wait
+    await Container.context.globalState.update(PENDING_DELETE_KEY, undefined);
+    await removeProjectFromDisk(pending.name, pending.rootPath, projectStorage, providerManager);
+    // We landed in the empty window from closeFolder; reveal the Project Manager
+    // sidebar so the user is back on the Projects list, ready to pick the next one.
+    commands.executeCommand("workbench.view.extension.project-manager");
 }
 
 async function killArchivedTmux(node: ArchivedProjectNode) {
@@ -236,4 +265,8 @@ export function registerArchiveCommands(projectStorage: ProjectStorage, provider
         commands.registerCommand("_projectManager.killAllArchivedTmux",
             () => killAllArchivedTmux(projectStorage)),
     );
+
+    // Finish a deferred delete-of-open-project from a prior session (the folder
+    // was closed and the host reloaded; now complete the removal).
+    completePendingProjectDelete(projectStorage, providerManager);
 }
