@@ -10,12 +10,10 @@ import { spawnDetachedClone } from "./cloneProject";
 import { run } from "./gitUtils";
 import { forgetTmuxAutoOpened } from "../utils/tmuxAutoOpen";
 import { latestSessionId, encodeProjectDir, copySessionWithCwdRewrite } from "./forkProject";
-import { getPinnedGitRepos } from "./gitPinning";
+import { listCanonicalRepos } from "./addGitRepo";
+import { PROJECTS_BASE } from "../core/constants";
 
 const INVESTIGATION_KIND = "investigation";
-// Investigations are normal projects.json entries (kind: investigation) whose
-// folder lives in ~/projects, alongside every other project.
-const PROJECTS_BASE = path.join(os.homedir(), "projects");
 
 function shellQuote(s: string): string {
     return `'${s.replace(/'/g, "'\\''")}'`;
@@ -142,10 +140,10 @@ async function promoteInvestigation(arg: InvestigationNode | string, projectStor
     const inv = findInvestigation(arg, projectStorage);
     if (!inv) { return; }
 
-    const pinned = [ ...getPinnedGitRepos() ].sort();
-    const picks: QuickPickItem[] = pinned.map(rootPath => ({ label: path.basename(rootPath), description: rootPath }));
+    const repos = listCanonicalRepos();
+    const picks: QuickPickItem[] = repos.map(rootPath => ({ label: path.basename(rootPath), description: rootPath }));
     if (picks.length === 0) {
-        window.showWarningMessage(l10n.t("No pinned Git repos available to promote into. Pin a repo in the Git section first."));
+        window.showWarningMessage(l10n.t("No Git repos available to promote into. Add one via the Git section first."));
         return;
     }
     const repoPick = await window.showQuickPick(picks, { placeHolder: l10n.t("Clone which repo for the promoted project?") });

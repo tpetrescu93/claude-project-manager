@@ -34,7 +34,7 @@ import { getPrUrlForPath, registerProjectStatuses } from "./commands/projectStat
 import { registerPostPrToSlack } from "./commands/postPrToSlack";
 import { registerAskClaude } from "./commands/askClaude";
 import { registerCopyProjectPath } from "./commands/copyProjectPath";
-import { initShowPinnedOnlyContext, toggleGitRepoPin, toggleShowPinnedOnly } from "./commands/gitPinning";
+import { registerGitRepoCommands } from "./commands/addGitRepo";
 import { canSwitchOnActiveWindow, openPickedProject, pickProjects, shouldOpenInNewWindow } from "./quickpick/projectsPicker";
 import { CustomProjectLocator } from "./autodetect/abstractLocator";
 import { l10n } from "vscode";
@@ -235,20 +235,6 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("_projectManager.renameProject", (node) => renameProject(node));
     vscode.commands.registerCommand("_projectManager.editTags", (node) => editTags(node));
     vscode.commands.registerCommand("projectManager.addToFavorites", (node) => saveProject(node));
-    const pinToggleHandler = async (node: any) => {
-        const rootPath: string = node?.preview?.path ?? node?.command?.arguments?.[0];
-        if (!rootPath) { return; }
-        await toggleGitRepoPin(rootPath);
-        providerManager.gitProvider.refresh();
-    };
-    vscode.commands.registerCommand("_projectManager.pin", pinToggleHandler);
-    vscode.commands.registerCommand("_projectManager.unpin", pinToggleHandler);
-    const toggleGitPinnedOnly = async () => {
-        await toggleShowPinnedOnly();
-        providerManager.gitProvider.refresh();
-    };
-    vscode.commands.registerCommand("_projectManager.showPinnedGitOnly", toggleGitPinnedOnly);
-    vscode.commands.registerCommand("_projectManager.showAllGit", toggleGitPinnedOnly);
     vscode.commands.registerCommand("_projectManager.toggleProjectEnabled", (node) => toggleProjectEnabled(node));
 
     const viewAsList = Container.context.globalState.get<boolean>("viewAsList", true);
@@ -287,7 +273,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     loadProjectsFile();
     registerProjectStatuses(projectStorage, providerManager);
-    initShowPinnedOnlyContext();
+    registerGitRepoCommands();
 
     // TODO: Extract the detection of the current project from `showStatusBar`, and optimize how it works.
     // Evaluate if it is really necessary to get the `Project` instance, or if just the root path is enough.

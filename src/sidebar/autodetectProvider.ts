@@ -10,7 +10,6 @@ import { CustomProjectLocator } from "../autodetect/abstractLocator";
 import { ProjectNode } from "./nodes";
 import { Container } from "../core/container";
 import { addParentFolderToDuplicates } from "../utils/path";
-import { getPinnedGitRepos, isGitRepoPinned, isShowingPinnedOnly } from "../commands/gitPinning";
 
 const REMOTE_URL_CACHE_KEY = "gitRemoteUrlCache";
 let remoteUrlCache: Record<string, string> | undefined;
@@ -186,10 +185,6 @@ export class AutodetectProvider implements vscode.TreeDataProvider<ProjectNode>,
                     let deduplicated = deduplicateByRemote(this.projectSource.projectList);
 
                     const isGit = this.projectSource.displayName === "Git";
-                    if (isGit && isShowingPinnedOnly()) {
-                        const pinned = getPinnedGitRepos();
-                        deduplicated = deduplicated.filter(p => pinned.has(p.fullPath));
-                    }
                     if (isGit) {
                         deduplicated = sortByGitOrder(deduplicated);
                     }
@@ -209,9 +204,6 @@ export class AutodetectProvider implements vscode.TreeDataProvider<ProjectNode>,
                                 title: "",
                                 arguments: [ dirinfo.path, dirinfo.name ],
                             }, !isGit);
-                        if (isGit && isGitRepoPinned(dirinfo.path)) {
-                            node.contextValue = "ProjectNodeKindPinned";
-                        }
                         lll.push(node);
                     }
                 }

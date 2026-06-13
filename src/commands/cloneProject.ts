@@ -12,6 +12,7 @@ import { ProjectStorage } from "../storage/storage";
 import { ProjectNode } from "../sidebar/nodes";
 import { pendingDir } from "./pendingProjectStore";
 import { validateBranchName } from "./gitUtils";
+import { PROJECTS_BASE } from "../core/constants";
 
 /**
  * Spawn a detached clone.sh script that clones sourcePath → targetDir on a new
@@ -77,7 +78,9 @@ async function cloneProject(node: ProjectNode, projectStorage: ProjectStorage) {
         p => path.resolve(p.rootPath) === path.resolve(sourcePath)
     );
     const repoName = sourceProject?.repoName ?? path.basename(sourcePath);
-    const targetDir = path.join(path.dirname(sourcePath), `${repoName}-${branchName}`);
+    // Working copies always land in the projects base, regardless of where the
+    // canonical source repo lives (e.g. the .repos folder).
+    const targetDir = path.join(PROJECTS_BASE, `${repoName}-${branchName}`);
     const pendingId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
     spawnDetachedClone({ sourcePath, targetDir, branchName, pendingId });

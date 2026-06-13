@@ -292,26 +292,6 @@
 				"icon": "$(terminal)"
 			},
 			{
-				"command": "_projectManager.pin",
-				"title": "%projectManager.commands.pin.title%",
-				"icon": "images/ico-pin-filled.svg"
-			},
-			{
-				"command": "_projectManager.unpin",
-				"title": "%projectManager.commands.unpin.title%",
-				"icon": "images/ico-pin-outline.svg"
-			},
-			{
-				"command": "_projectManager.showPinnedGitOnly",
-				"title": "%projectManager.commands.showPinnedGitOnly.title%",
-				"icon": "$(filter)"
-			},
-			{
-				"command": "_projectManager.showAllGit",
-				"title": "%projectManager.commands.showAllGit.title%",
-				"icon": "$(filter-filled)"
-			},
-			{
 				"command": "projectManager.addToWorkspace#sideBar",
 				"title": "%projectManager.commands.addToWorkspace#sideBar.title%"
 			},
@@ -374,7 +354,7 @@
 			{
 				"command": "_projectManager.cloneProject",
 				"title": "%projectManager.commands.cloneProject.title%",
-				"icon": "$(add)"
+				"icon": "$(repo-forked)"
 			},
 			{
 				"command": "_projectManager.forkProject",
@@ -458,6 +438,16 @@
 			{
 				"command": "_projectManager.askClaude",
 				"title": "Ask Claude"
+			},
+			{
+				"command": "_projectManager.addGitRepo",
+				"title": "%projectManager.commands.addGitRepo.title%",
+				"icon": "$(add)"
+			},
+			{
+				"command": "_projectManager.removeGitRepo",
+				"title": "%projectManager.commands.removeGitRepo.title%",
+				"icon": "$(close)"
 			}
 		],
 		"menus": {
@@ -496,22 +486,6 @@
 				},
 				{
 					"command": "_projectManager.openTmuxSession",
-					"when": "false"
-				},
-				{
-					"command": "_projectManager.pin",
-					"when": "false"
-				},
-				{
-					"command": "_projectManager.unpin",
-					"when": "false"
-				},
-				{
-					"command": "_projectManager.showPinnedGitOnly",
-					"when": "false"
-				},
-				{
-					"command": "_projectManager.showAllGit",
 					"when": "false"
 				},
 				{
@@ -717,16 +691,6 @@
 					"group": "navigation@2"
 				},
 				{
-					"command": "_projectManager.showPinnedGitOnly",
-					"when": "view == projectsExplorerGit && !projectManager.gitShowPinnedOnly",
-					"group": "navigation"
-				},
-				{
-					"command": "_projectManager.showAllGit",
-					"when": "view == projectsExplorerGit && projectManager.gitShowPinnedOnly",
-					"group": "navigation"
-				},
-				{
 					"command": "projectManager.saveProject",
 					"when": "view == projectsExplorerFavorites",
 					"group": "navigation@10"
@@ -830,6 +794,11 @@
 					"command": "projectManager.openSettings#sideBarMercurial",
 					"when": "view == projectsExplorerMercurial",
 					"group": "2_projectManager"
+				},
+				{
+					"command": "_projectManager.addGitRepo",
+					"when": "view == projectsExplorerGit",
+					"group": "navigation"
 				}
 			],
 			"view/item/context": [
@@ -964,19 +933,9 @@
 					"group": "favorites"
 				},
 				{
-					"command": "_projectManager.pin",
-					"when": "view == projectsExplorerGit && viewItem == ProjectNodeKind",
-					"group": "inline"
-				},
-				{
-					"command": "_projectManager.unpin",
-					"when": "view == projectsExplorerGit && viewItem == ProjectNodeKindPinned",
-					"group": "inline"
-				},
-				{
 					"command": "_projectManager.cloneProject",
 					"when": "view == projectsExplorerGit && viewItem =~ /^ProjectNodeKind/",
-					"group": "inline"
+					"group": "inline@1"
 				},
 				{
 					"command": "_projectManager.copyProjectPath",
@@ -1011,7 +970,7 @@
 				{
 					"command": "_projectManager.cloneProject",
 					"when": "view == projectsExplorerGit && viewItem =~ /^ProjectNodeKind/",
-					"group": "favorites"
+					"group": "inline@1"
 				},
 				{
 					"command": "_projectManager.forkProject",
@@ -1022,16 +981,6 @@
 					"command": "_projectManager.forkProjectAs",
 					"when": "view == projectsExplorerGit && viewItem =~ /^ProjectNodeKind/",
 					"group": "favorites"
-				},
-				{
-					"command": "_projectManager.pin",
-					"when": "view == projectsExplorerGit && viewItem == ProjectNodeKind",
-					"group": "workspace"
-				},
-				{
-					"command": "_projectManager.unpin",
-					"when": "view == projectsExplorerGit && viewItem == ProjectNodeKindPinned",
-					"group": "workspace"
 				},
 				{
 					"command": "_projectManager.restoreProject",
@@ -1107,6 +1056,21 @@
 					"command": "projectManager.addToFavorites",
 					"when": "view =~ /projectsExplorer(VSCode|SVN|Any|Mercurial)/ && viewItem == ProjectNodeKind",
 					"group": "workspace"
+				},
+				{
+					"command": "_projectManager.removeGitRepo",
+					"when": "view == projectsExplorerGit && viewItem =~ /^ProjectNodeKind/",
+					"group": "z_danger"
+				},
+				{
+					"command": "_projectManager.removeGitRepo",
+					"when": "view == projectsExplorerGit && viewItem =~ /^ProjectNodeKind/",
+					"group": "inline@3"
+				},
+				{
+					"command": "_projectManager.openTmuxSession",
+					"when": "view == projectsExplorerGit && viewItem =~ /^ProjectNodeKind/",
+					"group": "inline@2"
 				}
 			],
 			"editor/context": [

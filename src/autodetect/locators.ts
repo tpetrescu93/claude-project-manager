@@ -10,6 +10,7 @@ import { sortProjects } from "../utils/sorter";
 import { CustomProjectLocator } from "./abstractLocator";
 import { VSCodeRepositoryDetector } from "./vscodeRepositoryDetector";
 import { GitRepositoryDetector } from "./gitRepositoryDetector";
+import { CuratedGitLocator } from "./curatedGitLocator";
 import { l10n, Disposable, commands, ProgressLocation } from "vscode";
 import { isRemotePath, isRemoteUri } from "../utils/remote";
 import { Uri, window, workspace } from "vscode";
@@ -21,7 +22,7 @@ import { AutodetectedProjectInfo } from "./autodetectedProjectInfo";
 export class Locators implements Disposable {
 
     public vscLocator: CustomProjectLocator = new CustomProjectLocator("vscode", "VSCode", new VSCodeRepositoryDetector());
-    public gitLocator: CustomProjectLocator = new CustomProjectLocator("git", "Git", new GitRepositoryDetector([ ".git" ]));
+    public gitLocator: CustomProjectLocator = new CuratedGitLocator("git", "Git", new GitRepositoryDetector([ ".git" ]));
     public mercurialLocator: CustomProjectLocator = new CustomProjectLocator("hg", "Mercurial", new MercurialRepositoryDetector([ ".hg" ]));
     public svnLocator: CustomProjectLocator = new CustomProjectLocator("svn", "SVN", new SvnRepositoryDetector([ ".svn", "pristine" ]));
     public anyLocator: CustomProjectLocator = new CustomProjectLocator("any", "Any", new AnyRepositoryDetector([]));

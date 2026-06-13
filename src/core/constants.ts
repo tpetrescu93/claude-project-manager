@@ -5,6 +5,15 @@
 
 export const PROJECTS_FILE = "projects.json";
 
+import * as os from "os";
+import * as path from "path";
+
+/** Where working copies (clones/forks/investigations) live. */
+export const PROJECTS_BASE = path.join(os.homedir(), "projects");
+
+/** Where canonical git repos live — a hidden `.repos` folder under the projects base. */
+export const REPOS_BASE = path.join(PROJECTS_BASE, ".repos");
+
 export enum CommandLocation { CommandPalette, SideBar, StatusBar }
 
 export enum OpenInCurrentWindowIfEmptyMode {

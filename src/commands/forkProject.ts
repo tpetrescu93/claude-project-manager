@@ -12,6 +12,7 @@ import { ProjectStorage } from "../storage/storage";
 import { ProjectNode } from "../sidebar/nodes";
 import { spawnDetachedClone } from "./cloneProject";
 import { validateBranchName, run, shellQuote } from "./gitUtils";
+import { PROJECTS_BASE } from "../core/constants";
 
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), ".claude", "projects");
 
@@ -152,10 +153,9 @@ function forkFolderName(branchName: string, repoName: string | undefined): strin
  * Next fork name that doesn't collide with an existing folder or projects.json
  * entry — keeps bumping the `-ptN` suffix until a free slot is found.
  */
-function nextFreeForkName(sourceName: string, sourcePath: string, repoName: string | undefined, projectStorage: ProjectStorage): string {
-    const parentDir = path.dirname(sourcePath);
+function nextFreeForkName(sourceName: string, repoName: string | undefined, projectStorage: ProjectStorage): string {
     const taken = (branch: string): boolean =>
-        fs.existsSync(path.join(parentDir, forkFolderName(branch, repoName))) ||
+        fs.existsSync(path.join(PROJECTS_BASE, forkFolderName(branch, repoName))) ||
         projectStorage.getAll().some(p => p.name === branch);
 
     let candidate = suggestForkName(sourceName);
@@ -170,7 +170,7 @@ async function doFork(sourcePath: string, sourceName: string, repoName: string |
         return;
     }
 
-    let newName = nextFreeForkName(sourceName, sourcePath, repoName, projectStorage);
+    let newName = nextFreeForkName(sourceName, repoName, projectStorage);
     if (prompt) {
         const input = await window.showInputBox({
             prompt: l10n.t("New branch name"),
@@ -190,7 +190,9 @@ async function doFork(sourcePath: string, sourceName: string, repoName: string |
     }
 
     const folderName = forkFolderName(newName, repoName);
-    const targetDir = path.join(path.dirname(sourcePath), folderName);
+    // Working copies always land in the projects base, regardless of where the
+    // canonical source repo lives (e.g. the .repos folder).
+    const targetDir = path.join(PROJECTS_BASE, folderName);
     const pendingId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
     const sessionSrcDir = path.join(CLAUDE_PROJECTS_DIR, encodeProjectDir(sourcePath));
     const sessionDstDir = path.join(CLAUDE_PROJECTS_DIR, encodeProjectDir(targetDir));
