@@ -290,12 +290,16 @@ Investigations skip the git block (no repo) and lead with a `$(search)` marker +
 Right-click any project in Favorites, Git, Archived, or any auto-detected view → "Copy Project Path". Writes the project's `rootPath` to the clipboard and shows a brief confirmation toast.
 
 ### Ask Claude from editor
-Right-click any line in the editor → "Ask Claude". Opens an input box; the prompt is sent to the project's Claude tmux session via `tmux send-keys` with file context prepended:
+Right-click any line in the editor → "Ask Claude". Opens an input box; the prompt (with file context prepended) is delivered to the project's Claude tmux session via `tmux set-buffer` + `paste-buffer` + a separate `send-keys Enter`:
 
 - **No selection**: sends `<file>:<line>\n<prompt>`
 - **Selection**: sends `<file>:<startLine>-<endLine>\n\`\`\`\n<selected code>\n\`\`\`\n<prompt>`
 
+`set-buffer`/`paste-buffer` (not a plain `send-keys` of the whole string) because the message contains newlines: `send-keys` sends each character as a keystroke, so the embedded `\n`s register as Enter and submit the message early. `paste-buffer` delivers the text atomically; the trailing `send-keys Enter` then submits it once.
+
 If no tmux session exists for the current project, an error toast is shown. Works in the diff viewer too (`window.activeTextEditor` returns the modified side). If Claude is mid-turn, the message queues in the terminal buffer and is submitted when the current turn finishes.
+
+This is an *editor-initiated push* (you trigger from the editor and a prompt is sent). The complementary capability — Claude knowing your selection when you type *in* Claude — is separate future work; see "Ambient selection awareness" under Potential future features.
 
 ---
 
@@ -356,6 +360,12 @@ Sources: [Terminal Advanced (VS Code docs)](https://code.visualstudio.com/docs/t
 ---
 
 ## Potential future features
+
+### Ambient selection awareness
+Make a project's Claude session aware of the current VS Code editor selection when you type *in* Claude ("explain this", with no paste) — complementing the editor-initiated "Ask Claude from editor" push that already ships. The candidate mechanisms (UserPromptSubmit hook + extension-written selection file, on-demand `/sel` slash command, our own MCP server, a persistent IDE-protocol relay, the official `CLAUDE_CODE_SSE_PORT`/`/ide` paths) are researched and ranked in [`CLAUDE_SELECTION_INTEGRATION.md`](./CLAUDE_SELECTION_INTEGRATION.md); the recommendation is the hook + selection-file approach (auto-push every prompt, on officially supported surfaces), optionally paired with the `/sel` command for opt-in use.
+
+### Keep canonical local repos fresh via a background pull
+Clone/fork/promote (`clone.sh`) now fetch the upstream default branch fresh on every operation (so the new project starts from true-latest master, not the source's stale local ref). That fetch is paid per-operation (~0.7–2s). A background job that periodically pulls the **canonical** local repos (e.g. `~/projects/paydays-api`, the unsuffixed checkouts) on their default branch would mean the local object store is already current, making the per-clone fetch cheap or skippable and clones/forks faster. Would need to: identify the canonical repos (vs. the `<repo>-<branch>` working copies), only pull when on the default branch and clean (never disturb in-progress work), and run on a sensible cadence (launchd timer, or on activation). Care required not to resurrect the kind of background-job churn that the old name-prefix/cleanup cron caused — keep it read-only-ish (fetch + fast-forward only) and idempotent.
 
 ### Soft workspace switch
 Replace `vscode.openFolder(uri, …)` with `vscode.workspace.updateWorkspaceFolders(0, current.length, { uri: newUri })`. This mutates the workspace folder list in place — no window reload, no extension host restart.
