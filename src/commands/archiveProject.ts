@@ -3,6 +3,7 @@ import { commands, l10n, window, workspace } from "vscode";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { Container } from "../core/container";
+import { PathUtils } from "../utils/path";
 import { ProjectStorage } from "../storage/storage";
 import { Providers } from "../sidebar/providers";
 import { ProjectNode, ArchivedProjectNode, InvestigationNode } from "../sidebar/nodes";
@@ -166,10 +167,19 @@ async function deleteProject(node: ProjectNode, projectStorage: ProjectStorage, 
     if (!confirm) { return; }
 
     if (isProjectOpenInCurrentWindow(projectPath)) {
-        // Defer: close the folder (reloads into an empty window) and let the next
-        // activation do the removal, since we can't delete the open workspace dir.
+        // Can't rm -rf the open workspace folder, and switching away reloads the host —
+        // so record the intent and let the next activation finish it (see
+        // completePendingProjectDelete). Switch to another project rather than an empty
+        // window: the first enabled, non-investigation project that isn't this one.
         await Container.context.globalState.update(PENDING_DELETE_KEY, { name: projectName, rootPath: projectPath });
-        await commands.executeCommand("workbench.action.closeFolder");
+        const fallback = projectStorage.getAll().find(p =>
+            p.enabled !== false && p.kind !== "investigation" && path.resolve(p.rootPath) !== path.resolve(projectPath));
+        if (fallback) {
+            commands.executeCommand("_projectManager.open", PathUtils.expandHomePath(fallback.rootPath), fallback.name, fallback.profile ?? "");
+        } else {
+            // Nothing to switch to — fall back to closing into an empty window.
+            await commands.executeCommand("workbench.action.closeFolder");
+        }
         return;
     }
 
