@@ -362,26 +362,23 @@ Sources: [Terminal Advanced (VS Code docs)](https://code.visualstudio.com/docs/t
 ## Potential future features
 
 ### Ambient selection awareness
-Make a project's Claude session aware of the current VS Code editor selection when you type *in* Claude ("explain this", with no paste) — complementing the editor-initiated "Ask Claude from editor" push that already ships. The candidate mechanisms (UserPromptSubmit hook + extension-written selection file, on-demand `/sel` slash command, our own MCP server, a persistent IDE-protocol relay, the official `CLAUDE_CODE_SSE_PORT`/`/ide` paths) are researched and ranked in [`CLAUDE_SELECTION_INTEGRATION.md`](./CLAUDE_SELECTION_INTEGRATION.md); the recommendation is the hook + selection-file approach (auto-push every prompt, on officially supported surfaces), optionally paired with the `/sel` command for opt-in use.
+Make a project's Claude session aware of the current VS Code editor selection when you type *in* Claude ("explain this", with no paste) — complementing the editor-initiated "Ask Claude from editor" push that already ships. The candidate mechanisms (UserPromptSubmit hook + extension-written selection file, on-demand `/sel` slash command, our own MCP server, a persistent IDE-protocol relay, the official `CLAUDE_CODE_SSE_PORT`/`/ide` paths) are researched and ranked in [`FORK_CLAUDE_SELECTION_INTEGRATION.md`](./FORK_CLAUDE_SELECTION_INTEGRATION.md); the recommendation is the hook + selection-file approach (auto-push every prompt, on officially supported surfaces), optionally paired with the `/sel` command for opt-in use.
 
 ### Keep canonical local repos fresh via a background pull
 Clone/fork/promote (`clone.sh`) now fetch the upstream default branch fresh on every operation (so the new project starts from true-latest master, not the source's stale local ref). That fetch is paid per-operation (~0.7–2s). A background job that periodically pulls the **canonical** local repos (e.g. `~/projects/paydays-api`, the unsuffixed checkouts) on their default branch would mean the local object store is already current, making the per-clone fetch cheap or skippable and clones/forks faster. Would need to: identify the canonical repos (vs. the `<repo>-<branch>` working copies), only pull when on the default branch and clean (never disturb in-progress work), and run on a sensible cadence (launchd timer, or on activation). Care required not to resurrect the kind of background-job churn that the old name-prefix/cleanup cron caused — keep it read-only-ish (fetch + fast-forward only) and idempotent.
 
-### Soft workspace switch
-Replace `vscode.openFolder(uri, …)` with `vscode.workspace.updateWorkspaceFolders(0, current.length, { uri: newUri })`. This mutates the workspace folder list in place — no window reload, no extension host restart.
-
-**Win:**
-- No 1–2s reload on every project switch.
-- Extension host stays warm — biggest perceived speed-up.
-- Editor layout, sidebar state, output panels persist.
-
-**Cost:**
-- Terminals don't auto-cwd. Options: `terminal.sendText("cd '<newPath>'")` per terminal, or dispose them, or hybrid (dispose Claude terminals, `cd` the rest).
-- Open editors from the old folder remain visible (could be feature or nuisance).
-- Workspace identity in VS Code is derived from the folder URI — per-workspace state *may* rebind to a different bucket on each swap. Worth testing.
-- Extensions that only read `workspace.workspaceFolders` at activation (don't subscribe to `onDidChangeWorkspaceFolders`) will show stale state until manual reload. ~10–20% of extensions historically. Cmd+R is the escape hatch.
-
-**Scope:** ~10–30 lines in `_projectManager.open`, plus terminal cleanup policy.
+### Soft workspace switch (no reload on project switch)
+Switch projects without the ~1–2s window reload + extension-host restart that `vscode.openFolder`
+incurs. The naive `updateWorkspaceFolders(0, …)` doesn't work (replacing the only folder of a
+single-folder workspace converts it to an untitled multi-root workspace, which *still* restarts the
+host); the approach that does is an **anchor folder pinned at index 0** with the project swapped at
+index 1 — VS Code only restarts on folder-0 changes, so index-1 swaps avoid it entirely. This was
+built on the `soft-switch` branch and worked (no reload, no rebuild), then shelved when the branch
+fell behind master. The full VS Code workspace-switch research (process model, why the host restarts,
+options, rejected alternatives) **and** the implementation-as-built notes (anchored workspace,
+per-investigation tab/layout/terminal/focus restore via `getEditorLayout`/`setEditorLayout`,
+provenance-based terminal trust, the gotchas solved) are in [`FORK_SOFT_SWITCH.md`](./FORK_SOFT_SWITCH.md) —
+enough to re-implement on current master.
 
 ### Gate thinking detection on Claude being the foreground process
 The diff-based thinking detection (see Claude session status) only knows "this tmux pane's content changed" — it has no concept of whether Claude is actually running. So a long-running *non-Claude* command in that session (`npm test`, `tail -f`, etc.), or typing at a bash prompt that doesn't use the `❯` character, can falsely light up the thinking swirl. Could gate on the foreground process via `tmux display-message -p '#{pane_current_command}'` (check for `claude`/`node`) before treating a diff as "Claude thinking". Deferred — in practice each tmux session here is dedicated to Claude, so false positives are rare.
