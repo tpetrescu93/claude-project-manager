@@ -20,7 +20,6 @@ import { CommandLocation, PROJECTS_FILE } from "./core/constants";
 import { isMacOS, isRemoteUri, isWindows } from "./utils/remote";
 import { buildProjectUri } from "./utils/uri";
 import { Container } from "./core/container";
-import { registerWhatsNew } from "./whats-new/commands";
 import { registerSupportProjectManager } from "./commands/supportProjectManager";
 import { registerRevealFileInOS } from "./commands/revealFileInOS";
 import { registerOpenSettings } from "./commands/openSettings";
@@ -78,7 +77,6 @@ export async function activate(context: vscode.ExtensionContext) {
     registerSideBarDecorations();
     await registerWalkthrough();
 
-    registerWhatsNew();
 
     // VS Code restores sidebar focus on workspace reload. Defocus it on activation
     // so the user lands in the editor group, not the project list.

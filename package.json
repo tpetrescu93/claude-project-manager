@@ -344,14 +344,6 @@
 				"title": "%projectManager.commands.editTags.title%"
 			},
 			{
-				"command": "projectManager.whatsNew",
-				"title": "%projectManager.commands.whatsNew.title%"
-			},
-			{
-				"command": "_projectManager.whatsNewContextMenu",
-				"title": "%projectManager.commands.whatsNewContextMenu.title%"
-			},
-			{
 				"command": "projectManager.addToFavorites",
 				"title": "%projectManager.commands.addToFavorites.title%"
 			},
@@ -684,10 +676,6 @@
 				},
 				{
 					"command": "projectManager.openSettings#sideBarMercurial",
-					"when": "false"
-				},
-				{
-					"command": "_projectManager.whatsNewContextMenu",
 					"when": "false"
 				},
 				{
@@ -1126,13 +1114,6 @@
 					"command": "_projectManager.askClaude",
 					"when": "editorFocus",
 					"group": "projectManager"
-				}
-			],
-			"extension/context": [
-				{
-					"command": "_projectManager.whatsNewContextMenu",
-					"group": "projectManager",
-					"when": "extension == alefragnani.project-manager && extensionStatus == installed"
 				}
 			],
 			"projectManager.sideBar.favorites.title": [
@@ -1613,7 +1594,7 @@
 		"webpack": "webpack --mode development",
 		"webpack-dev": "webpack --mode development --watch",
 		"compile": "tsc -p ./",
-		"lint": "eslint -c package.json --ext .ts src vscode-whats-new",
+		"lint": "eslint -c package.json --ext .ts src",
 		"pretest": "npm run compile && npm run lint",
 		"test-compile": "tsc -p ./ && npm run webpack",
 		"just-test": "node ./out/src/test/runTest.js",
