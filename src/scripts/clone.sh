@@ -14,6 +14,9 @@
 #   $10 SESSION_DST_DIR    (fork/promote) ~/.claude/projects/<encoded-target>
 #   $11 INV_SESSION_TO_KILL  (promote) tmux session name to kill after clone; "" to skip
 #   $12 KIND               (promote) "investigation" to embed in pending JSON; "" to skip
+#   $13 DEFAULT_BRANCH     upstream default branch resolved by the extension; "" = look it up here
+#   $14 SKIP_FETCH         "1" if the extension confirmed the source is already at the upstream
+#                          tip (via GraphQL) — check out from the local clone, no network fetch
 set -euo pipefail
 
 SOURCE_PATH="$1"
@@ -28,6 +31,8 @@ SESSION_SRC_DIR="${9:-}"
 SESSION_DST_DIR="${10:-}"
 INV_SESSION_TO_KILL="${11:-}"
 KIND="${12:-}"
+DEFAULT_BRANCH="${13:-}"
+SKIP_FETCH="${14:-}"
 
 mkdir -p "$(dirname "$LOG_FILE")"
 exec >> "$LOG_FILE" 2>&1
@@ -67,14 +72,22 @@ defaultBranch=""
 if [ -n "$_upstreamUrl" ]; then
     git remote set-url origin "$_upstreamUrl"
 
-    defaultBranch=$(git -C "$SOURCE_PATH" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null \
-        | sed 's#^origin/##')
-    if [ -n "$defaultBranch" ] && git fetch origin "$defaultBranch" 2>/dev/null; then
+    # Prefer the extension-supplied default branch (resolved via GraphQL); otherwise
+    # read the source's cached origin/HEAD (an instant local ref read).
+    defaultBranch="$DEFAULT_BRANCH"
+    [ -z "$defaultBranch" ] && defaultBranch=$(git -C "$SOURCE_PATH" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')
+
+    if [ "$SKIP_FETCH" = "1" ] && [ -n "$defaultBranch" ] && git rev-parse --verify "origin/$defaultBranch" >/dev/null 2>&1; then
+        # Extension confirmed (via GraphQL) the source is already at the upstream tip.
+        # The local clone hardlinked that tip, so check it out with no network fetch.
+        git checkout -B "$defaultBranch" "origin/$defaultBranch"
+        git remote set-head origin "$defaultBranch" 2>/dev/null || true
+    elif [ -n "$defaultBranch" ] && git fetch origin "$defaultBranch" 2>/dev/null; then
         git checkout -B "$defaultBranch" "origin/$defaultBranch"
         # Stamp this new repo's origin/HEAD so a future clone FROM it is fast too.
         git remote set-head origin "$defaultBranch" 2>/dev/null || true
     else
-        defaultBranch=""   # empty/unfetchable cache — fall through to local fallback
+        defaultBranch=""   # empty/unfetchable — fall through to local fallback
     fi
 fi
 
