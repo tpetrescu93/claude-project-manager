@@ -2,6 +2,8 @@
 
 Fork of [alefragnani/vscode-project-manager](https://github.com/alefragnani/vscode-project-manager) (v13.1.0). This document is a living record of what's been added on top of upstream and what remains as potential future work.
 
+**This is a standalone tool, not a staging ground for upstream contributions.** It started as a fork but has diverged into its own thing — a per-project Claude Code orchestrator that happens to be built on Project Manager's sidebar — and **upstreaming back into Project Manager is an explicit non-goal.** Design decisions are driven by what this tool needs (e.g. replacing the `baseFolders` scan with a curated `.repos` list, the clone/fork/promote workflow, tmux+Claude session management), not by what upstream would accept. The shared lineage is why it's still called a "fork" and why the upstream comparison below is kept — as context on the divergence, not as a roadmap toward merging.
+
 ## Rendering approach
 
 Two possible architectures for the sidebar view. The choice constrains which features are possible.
@@ -423,6 +425,8 @@ The branch was deleted; the doc remains so it can be revisited if the cost/benef
 ---
 
 ## Upstream viability
+
+Upstreaming is a non-goal (see the intro) — this section is kept only as context on *why* divergence is the right call, not as an evaluation of whether to merge back.
 
 Based on the upstream repo's PR history (as of 2026-04-13):
 
