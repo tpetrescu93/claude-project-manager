@@ -307,20 +307,8 @@ Investigations skip the git block (no repo) and lead with a `$(search)` marker +
 ### Copy Project Path
 Right-click any project in Favorites, Git, Archived, or any auto-detected view → "Copy Project Path". Writes the project's `rootPath` to the clipboard and shows a brief confirmation toast.
 
-### Ask Claude from editor
-Right-click any line in the editor → "Ask Claude". Opens an input box; the prompt (with file context prepended) is delivered to the project's Claude tmux session via `tmux set-buffer` + `paste-buffer` + a separate `send-keys Enter`:
-
-- **No selection**: sends `<file>:<line>\n<prompt>`
-- **Selection**: sends `<file>:<startLine>-<endLine>\n\`\`\`\n<selected code>\n\`\`\`\n<prompt>`
-
-`set-buffer`/`paste-buffer` (not a plain `send-keys` of the whole string) because the message contains newlines: `send-keys` sends each character as a keystroke, so the embedded `\n`s register as Enter and submit the message early. `paste-buffer` delivers the text atomically; the trailing `send-keys Enter` then submits it once.
-
-If no tmux session exists for the current project, an error toast is shown. Works in the diff viewer too (`window.activeTextEditor` returns the modified side). If Claude is mid-turn, the message queues in the terminal buffer and is submitted when the current turn finishes.
-
-This is an *editor-initiated push* (you trigger from the editor and a prompt is sent). The complementary capability — Claude knowing your selection when you type *in* Claude — ships separately as **Ambient selection awareness** (below).
-
 ### Ambient selection awareness
-The complement to "Ask Claude from editor": rather than pushing a prompt *from* the editor, your Claude session passively *knows* what you have selected when you type **in** Claude ("explain this", "rename this" — no paste, no trigger). Implemented as the hook + selection-file design (Option 6 in [`FORK_CLAUDE_SELECTION_INTEGRATION.md`](./FORK_CLAUDE_SELECTION_INTEGRATION.md)):
+Your Claude session passively *knows* what you have selected in the editor when you type **in** Claude ("explain this", "rename this" — no paste, no trigger). Implemented as the hook + selection-file design (Option 6 in [`FORK_CLAUDE_SELECTION_INTEGRATION.md`](./FORK_CLAUDE_SELECTION_INTEGRATION.md)):
 
 - **Extension** (`selectionTracker.ts`): on `onDidChangeTextEditorSelection` / `onDidChangeActiveTextEditor` (debounced 200ms — cursor moves fire it constantly), writes the active file-editor's `{file, startLine, endLine, text}` to `~/.claude/current-selection.json`. An empty selection (a bare cursor counts) or a non-`file` editor clears it to `{}` — only a real highlighted range is published. Best-effort; a write failure never disturbs the editor.
 - **Hook** (`~/.claude/hooks/selection-context.sh`, a `UserPromptSubmit` hook): on every prompt, reads that file and — when non-empty — injects a compact pointer + preview as context (`The user currently has this selected in their editor: <file>:<start>-<end> — preview: "<…>" (N chars). …read that line range.`). Empty / missing / malformed → injects nothing (`exit 0`).

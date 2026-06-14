@@ -436,10 +436,6 @@
 				"icon": "$(circle-slash)"
 			},
 			{
-				"command": "_projectManager.askClaude",
-				"title": "Ask Claude"
-			},
-			{
 				"command": "_projectManager.addGitRepo",
 				"title": "%projectManager.commands.addGitRepo.title%",
 				"icon": "$(add)"
@@ -452,10 +448,6 @@
 		],
 		"menus": {
 			"commandPalette": [
-				{
-					"command": "_projectManager.askClaude",
-					"when": "false"
-				},
 				{
 					"command": "_projectManager.open",
 					"when": "false"
@@ -1071,13 +1063,6 @@
 					"command": "_projectManager.openTmuxSession",
 					"when": "view == projectsExplorerGit && viewItem =~ /^ProjectNodeKind/",
 					"group": "inline@2"
-				}
-			],
-			"editor/context": [
-				{
-					"command": "_projectManager.askClaude",
-					"when": "editorFocus",
-					"group": "projectManager"
 				}
 			],
 			"projectManager.sideBar.favorites.title": [

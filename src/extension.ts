@@ -32,7 +32,6 @@ import { registerInvestigations } from "./commands/investigations";
 import { registerArchiveCommands } from "./commands/archiveProject";
 import { getPrUrlForPath, registerProjectStatuses } from "./commands/projectStatuses";
 import { registerPostPrToSlack } from "./commands/postPrToSlack";
-import { registerAskClaude } from "./commands/askClaude";
 import { registerCopyProjectPath } from "./commands/copyProjectPath";
 import { registerGitRepoCommands } from "./commands/addGitRepo";
 import { registerSyncGitRepos } from "./commands/syncGitRepos";
@@ -73,7 +72,6 @@ export async function activate(context: vscode.ExtensionContext) {
     registerInvestigations(projectStorage, providerManager);
     registerArchiveCommands(projectStorage, providerManager);
     registerPostPrToSlack(providerManager);
-    registerAskClaude();
     registerCopyProjectPath();
     registerSortBy();
     registerSideBarDecorations();

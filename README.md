@@ -13,11 +13,10 @@ This is a personal fork of the [VS Code Project Manager extension](https://githu
 - **PR/CI status icons** that update every 6s (passing, failing, pending, conflicts, changes-requested, approved, merged), with sort-by-status
 - **Claude live state** — thinking 🌀 / needs-input 🔔 indicators per project
 - **Rich hover tooltip** — PR title, author, Jira link, Slack link, diff stats, tmux session uptime, Claude state
-- **Ask Claude from editor** — right-click a line/selection to send it (with file context) to the project's Claude session
 - **Ambient selection awareness** — your Claude session knows what you have selected in the editor (extension writes the selection, a `UserPromptSubmit` hook injects it), so "explain this" works with no paste
 - **Post PR to Slack** with auto-react on merge
 - **Investigations** — instant scratch sessions with auto-generated names, promotable to real git projects
-- **Copy project path**, and open tmux sessions as floating windows for non-active projects
+- **Open tmux sessions as floating windows** for non-active projects
 
 ## Installation
 
