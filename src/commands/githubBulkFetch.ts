@@ -195,3 +195,82 @@ export async function bulkFetchPrStatuses(inputs: BulkFetchInput[]): Promise<Map
 export function invalidateGhTokenCache(): void {
     cachedToken = undefined;
 }
+
+/** POST a GraphQL query and return `data`, or undefined on auth/network failure. */
+async function postGraphql(query: string): Promise<any | undefined> {
+    const token = await getGhToken();
+    if (!token) { return undefined; }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    try {
+        const resp = await fetch(GRAPHQL_URL, {
+            method: "POST",
+            headers: {
+                "Authorization": `bearer ${token}`,
+                "Content-Type": "application/json",
+                "User-Agent": "vscode-project-manager-fork",
+            },
+            body: JSON.stringify({ query }),
+            signal: controller.signal,
+        });
+        if (resp.status === 401) { cachedToken = undefined; return undefined; }
+        if (!resp.ok) { return undefined; }
+        const body = await resp.json();
+        return body?.data;
+    } catch {
+        return undefined;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+export interface DefaultBranchHead {
+    defaultBranch: string;
+    oid: string;
+}
+
+/**
+ * One batched GraphQL call returning each repo's default branch name + tip commit
+ * OID — far cheaper than a per-repo `git ls-remote` (a single HTTPS round-trip for
+ * all repos, ~0.5s, vs an SSH upload-pack per repo, ~1.8s each, that the server's
+ * full ref advertisement dominates). Returns undefined on auth/total failure;
+ * repos the API didn't answer (non-existent / no access) are absent from the map.
+ */
+export async function bulkFetchDefaultBranches(
+    repos: { rootPath: string; owner: string; repo: string }[]
+): Promise<Map<string, DefaultBranchHead> | undefined> {
+    if (repos.length === 0) { return new Map(); }
+
+    // Group by (owner, repo) so duplicate repos collapse to one query block.
+    const byRepo = new Map<string, { rootPath: string; owner: string; repo: string }[]>();
+    for (const r of repos) {
+        const key = `${r.owner}/${r.repo}`;
+        const arr = byRepo.get(key);
+        if (arr) { arr.push(r); } else { byRepo.set(key, [ r ]); }
+    }
+
+    let query = "query {";
+    const aliasMap = new Map<string, { rootPath: string; owner: string; repo: string }[]>();
+    let idx = 0;
+    for (const items of byRepo.values()) {
+        const alias = `r${idx++}`;
+        aliasMap.set(alias, items);
+        const owner = escapeGraphqlString(items[ 0 ].owner);
+        const repo = escapeGraphqlString(items[ 0 ].repo);
+        query += ` ${alias}: repository(owner:"${owner}", name:"${repo}") { defaultBranchRef { name target { oid } } }`;
+    }
+    query += " }";
+
+    const data = await postGraphql(query);
+    if (!data) { return undefined; }
+
+    const out = new Map<string, DefaultBranchHead>();
+    for (const [ alias, items ] of aliasMap) {
+        const ref = data[ alias ]?.defaultBranchRef;
+        const name = ref?.name;
+        const oid = ref?.target?.oid;
+        if (!name || !oid) { continue; }
+        for (const it of items) { out.set(it.rootPath, { defaultBranch: name, oid }); }
+    }
+    return out;
+}
