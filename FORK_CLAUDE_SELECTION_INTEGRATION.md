@@ -6,6 +6,12 @@ code the user has selected in the VS Code editor — so the user can refer to "t
 
 This documents the mechanisms available, what each requires, and a ranked recommendation.
 
+> **Status: shipped.** Option 6 (the `UserPromptSubmit` hook + extension-written selection file) is
+> implemented — `selectionTracker.ts` writes `~/.claude/current-selection.json`, and
+> `~/.claude/hooks/selection-context.sh` injects a location + ≤200-char preview on every prompt. See
+> "Ambient selection awareness" in `FORK.md`. The rest of this doc is the original research that led
+> to that choice.
+
 ---
 
 ## Background
@@ -203,17 +209,24 @@ context, so Claude always sees the live selection without the user pasting it or
 **What we'd need.**
 - Extension: on `window.onDidChangeTextEditorSelection`, write `{file, startLine, endLine, text}` of
   the active editor to `~/.claude/current-selection.json` (clear/empty it when selection is empty).
-- A `UserPromptSubmit` hook in `~/.claude/settings.json` that reads that file and emits the selection
-  as `additionalContext` (only when non-empty), `exit 0`.
+- A `UserPromptSubmit` hook in `~/.claude/settings.json` that reads that file and, when non-empty,
+  emits a **compact pointer + short preview** (not the full text) as `additionalContext` (`exit 0`) —
+  e.g. `Active selection: <file>:<start>-<end> — preview: "<first ~100 chars, whitespace-collapsed>… (N chars)"`.
+  Injecting the *location* rather than the whole block keeps the per-turn payload tiny: short
+  selections fit entirely in the ~100-char preview, and for longer ones Claude reads the cited line
+  range on demand. This is also the primary mitigation for the #40216 accumulation bug — a 100-char
+  hint accumulating is harmless where a multi-KB block would not be. The line range must stay in, or a
+  blind truncation of a large selection would be unrecoverable.
 
 **Pros.** Auto-push every prompt (the behaviour users actually want) **on officially supported
 surfaces** (hooks + our own file) — no reverse-engineered protocol, no CLI-update breakage risk.
 Stable: file-based, immune to the dynamic-port churn that defeats Options 2/3/5's env path. Simple —
 no daemon, no protocol server.
-**Cons.** Injects selection text into every prompt (minor token cost / noise; gate on non-empty).
-Reads the *active* window's selection — correct for single-window usage, but a background project's
-session would see the foreground project's selection. Subject to the #40216 accumulation bug until
-fixed.
+**Cons.** Injects a small selection pointer into every prompt (gate on non-empty; the ~100-char
+preview keeps the cost/noise negligible). For a selection longer than the preview, Claude pays one
+extra `Read` of the cited line range to act on it. Reads the *active* window's selection — correct
+for single-window usage, but a background project's session would see the foreground project's
+selection. Subject to the #40216 accumulation bug until fixed (the small preview blunts it).
 
 ### Option 7 — On-demand slash command / MCP prompt that injects the selection
 

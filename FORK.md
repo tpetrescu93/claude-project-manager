@@ -314,7 +314,16 @@ Right-click any line in the editor → "Ask Claude". Opens an input box; the pro
 
 If no tmux session exists for the current project, an error toast is shown. Works in the diff viewer too (`window.activeTextEditor` returns the modified side). If Claude is mid-turn, the message queues in the terminal buffer and is submitted when the current turn finishes.
 
-This is an *editor-initiated push* (you trigger from the editor and a prompt is sent). The complementary capability — Claude knowing your selection when you type *in* Claude — is separate future work; see "Ambient selection awareness" under Potential future features.
+This is an *editor-initiated push* (you trigger from the editor and a prompt is sent). The complementary capability — Claude knowing your selection when you type *in* Claude — ships separately as **Ambient selection awareness** (below).
+
+### Ambient selection awareness
+The complement to "Ask Claude from editor": rather than pushing a prompt *from* the editor, your Claude session passively *knows* what you have selected when you type **in** Claude ("explain this", "rename this" — no paste, no trigger). Implemented as the hook + selection-file design (Option 6 in [`FORK_CLAUDE_SELECTION_INTEGRATION.md`](./FORK_CLAUDE_SELECTION_INTEGRATION.md)):
+
+- **Extension** (`selectionTracker.ts`): on `onDidChangeTextEditorSelection` / `onDidChangeActiveTextEditor` (debounced 200ms — cursor moves fire it constantly), writes the active file-editor's `{file, startLine, endLine, text}` to `~/.claude/current-selection.json`. An empty selection (a bare cursor counts) or a non-`file` editor clears it to `{}` — only a real highlighted range is published. Best-effort; a write failure never disturbs the editor.
+- **Hook** (`~/.claude/hooks/selection-context.sh`, a `UserPromptSubmit` hook): on every prompt, reads that file and — when non-empty — injects a compact pointer + preview as context (`The user currently has this selected in their editor: <file>:<start>-<end> — preview: "<…>" (N chars). …read that line range.`). Empty / missing / malformed → injects nothing (`exit 0`).
+- **Preview, not full text.** The payload is the location + a **≤200-char** preview (whitespace-collapsed), not the whole selection. Short selections (the common case) arrive complete → Claude acts with no read; longer ones are a hint + a line range Claude reads on demand. 200 captures most one/two-line selections in full at negligible token cost, and keeps the per-turn payload small enough that the [#40216](https://github.com/anthropics/claude-code/issues/40216) `additionalContext`-accumulation bug stays moot.
+- **Lives partly outside the repo.** Only the extension's writer ships here; the hook script + its `UserPromptSubmit` registration in `~/.claude/settings.json` are machine-local. The hook *script* is re-read each invocation (so the cap is tunable live), but the *registration* is snapshotted at Claude session start — enabling it needs one restart.
+- **Caveats.** Reads the *active window's* selection (correct single-window; a background project's session would see the foreground selection). A bare cursor injects nothing by design — there's no current-line fallback.
 
 ---
 
@@ -375,9 +384,6 @@ Sources: [Terminal Advanced (VS Code docs)](https://code.visualstudio.com/docs/t
 ---
 
 ## Potential future features
-
-### Ambient selection awareness
-Make a project's Claude session aware of the current VS Code editor selection when you type *in* Claude ("explain this", with no paste) — complementing the editor-initiated "Ask Claude from editor" push that already ships. The candidate mechanisms (UserPromptSubmit hook + extension-written selection file, on-demand `/sel` slash command, our own MCP server, a persistent IDE-protocol relay, the official `CLAUDE_CODE_SSE_PORT`/`/ide` paths) are researched and ranked in [`FORK_CLAUDE_SELECTION_INTEGRATION.md`](./FORK_CLAUDE_SELECTION_INTEGRATION.md); the recommendation is the hook + selection-file approach (auto-push every prompt, on officially supported surfaces), optionally paired with the `/sel` command for opt-in use.
 
 ### Gate thinking detection on Claude being the foreground process
 The diff-based thinking detection (see Claude session status) only knows "this tmux pane's content changed" — it has no concept of whether Claude is actually running. So a long-running *non-Claude* command in that session (`npm test`, `tail -f`, etc.), or typing at a bash prompt that doesn't use the `❯` character, can falsely light up the thinking swirl. Could gate on the foreground process via `tmux display-message -p '#{pane_current_command}'` (check for `claude`/`node`) before treating a diff as "Claude thinking". Deferred — in practice each tmux session here is dedicated to Claude, so false positives are rare.
