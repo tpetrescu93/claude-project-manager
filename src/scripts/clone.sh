@@ -57,15 +57,24 @@ cd "$TARGET_DIR"
 _upstreamUrl=$(git -C "$SOURCE_PATH" remote get-url origin 2>/dev/null || echo "")
 
 defaultBranch=""
+# Resolve the upstream default branch (main vs master) from the SOURCE's locally
+# cached origin/HEAD — an instant ref read, no network. A `ls-remote --symref
+# HEAD` would cost ~1.8s on repos with many refs (paydays-api advertises 50k+)
+# just to learn a name that almost never changes. The cache is kept correct by
+# the repo-sync job (canonical repos), by `git clone` (Add Git Repo), by the
+# set-head stamp below (new clones), and by the one-time origin/HEAD migration
+# (pre-existing project-list/archive clones) — so no network lookup is needed.
 if [ -n "$_upstreamUrl" ]; then
     git remote set-url origin "$_upstreamUrl"
-    # Canonical default = the upstream's HEAD symref (main vs master, per GitHub).
-    defaultBranch=$(git ls-remote --symref "$_upstreamUrl" HEAD 2>/dev/null \
-        | sed -n 's#^ref: refs/heads/\([^[:space:]]*\).*#\1#p')
+
+    defaultBranch=$(git -C "$SOURCE_PATH" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null \
+        | sed 's#^origin/##')
     if [ -n "$defaultBranch" ] && git fetch origin "$defaultBranch" 2>/dev/null; then
         git checkout -B "$defaultBranch" "origin/$defaultBranch"
+        # Stamp this new repo's origin/HEAD so a future clone FROM it is fast too.
+        git remote set-head origin "$defaultBranch" 2>/dev/null || true
     else
-        defaultBranch=""   # detection/fetch failed — fall through to local fallback
+        defaultBranch=""   # empty/unfetchable cache — fall through to local fallback
     fi
 fi
 
@@ -83,13 +92,23 @@ fi
 # 3. Create new branch
 git checkout -b "$BRANCH_NAME"
 
-# 4. .venv: copy symlink if source has one, otherwise symlink the real dir
-src_venv="$SOURCE_PATH/.venv"
-if [ -L "$src_venv" ]; then
-    cp -P "$src_venv" .venv
-elif [ -d "$src_venv" ]; then
-    ln -s "$src_venv" .venv
-fi
+# 4. Replicate every .venv the source has, at the same relative path — a repo may
+#    keep more than one (e.g. a per-subproject venv alongside the root one). A
+#    symlink is copied verbatim (cp -P), a real dir is symlinked back to the source.
+#    -prune stops find descending INTO a real .venv (thousands of files); maxdepth
+#    keeps it to the repo's own venvs, not stray ones in deep fixtures.
+( cd "$SOURCE_PATH" && find . -maxdepth 2 -name .venv \( -type l -o -type d \) -prune -print ) \
+| while IFS= read -r rel; do
+    rel="${rel#./}"
+    src="$SOURCE_PATH/$rel"
+    dst="$TARGET_DIR/$rel"
+    mkdir -p "$(dirname "$dst")"
+    if [ -L "$src" ]; then
+        cp -P "$src" "$dst"
+    elif [ -d "$src" ]; then
+        ln -s "$src" "$dst"
+    fi
+done
 
 # 5. bun install if JS lockfile present
 if [ -f yarn.lock ] || [ -f package-lock.json ]; then
