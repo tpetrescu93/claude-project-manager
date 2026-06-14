@@ -1124,6 +1124,17 @@
 						"default": false,
 						"description": "%projectManager.configuration.openInNewWindowWhenClickingInStatusBar.description%"
 					},
+					"projectManager.git.autoSync.enabled": {
+						"type": "boolean",
+						"default": true,
+						"description": "Periodically fast-forward the default branch of each repo in the Git view to its upstream, in the background. Non-destructive: never switches branches, resets, or touches dirty working trees or submodules."
+					},
+					"projectManager.git.autoSync.intervalMinutes": {
+						"type": "number",
+						"default": 10,
+						"minimum": 1,
+						"description": "How often (in minutes) the Git-repo auto-sync runs while a VS Code window is open."
+					},
 					"projectManager.removeCurrentProjectFromList": {
 						"type": "boolean",
 						"default": true,

@@ -35,6 +35,7 @@ import { registerPostPrToSlack } from "./commands/postPrToSlack";
 import { registerAskClaude } from "./commands/askClaude";
 import { registerCopyProjectPath } from "./commands/copyProjectPath";
 import { registerGitRepoCommands } from "./commands/addGitRepo";
+import { registerSyncGitRepos } from "./commands/syncGitRepos";
 import { canSwitchOnActiveWindow, openPickedProject, pickProjects, shouldOpenInNewWindow } from "./quickpick/projectsPicker";
 import { CustomProjectLocator } from "./autodetect/abstractLocator";
 import { l10n } from "vscode";
@@ -274,6 +275,7 @@ export async function activate(context: vscode.ExtensionContext) {
     loadProjectsFile();
     registerProjectStatuses(projectStorage, providerManager);
     registerGitRepoCommands();
+    registerSyncGitRepos(context);
 
     // TODO: Extract the detection of the current project from `showStatusBar`, and optimize how it works.
     // Evaluate if it is really necessary to get the `Project` instance, or if just the root path is enough.
