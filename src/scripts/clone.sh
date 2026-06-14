@@ -105,16 +105,21 @@ fi
 # 3. Create new branch
 git checkout -b "$BRANCH_NAME"
 
-# 4. Replicate every .venv the source has, at the same relative path — a repo may
-#    keep more than one (e.g. a per-subproject venv alongside the root one). A
-#    symlink is copied verbatim (cp -P), a real dir is symlinked back to the source.
-#    -prune stops find descending INTO a real .venv (thousands of files); maxdepth
-#    keeps it to the repo's own venvs, not stray ones in deep fixtures.
-( cd "$SOURCE_PATH" && find . -maxdepth 2 -name .venv \( -type l -o -type d \) -prune -print ) \
+# 4. Replicate the source's untracked symlinks — the dev-convenience links git
+#    doesn't carry across a clone: .venv -> shared venv (root and per-subproject),
+#    CLAUDE.local.md -> ~/.claude/<repo>.md, etc. Prune .git/node_modules, and treat
+#    .venv as a unit (don't descend INTO a real .venv and copy its internal
+#    bin/python* links). Skip links the clone already reproduced (tracked ones).
+#    cp -P copies a symlink verbatim; a real .venv dir is symlinked back to source.
+( cd "$SOURCE_PATH" && find . -maxdepth 3 \
+    \( -name .git -o -name node_modules \) -prune -o \
+    -name .venv \( -type l -o -type d \) -print -prune -o \
+    -type l -print ) \
 | while IFS= read -r rel; do
     rel="${rel#./}"
     src="$SOURCE_PATH/$rel"
     dst="$TARGET_DIR/$rel"
+    [ -L "$dst" ] && continue
     mkdir -p "$(dirname "$dst")"
     if [ -L "$src" ]; then
         cp -P "$src" "$dst"
@@ -123,12 +128,12 @@ git checkout -b "$BRANCH_NAME"
     fi
 done
 
-# 5. bun install if JS lockfile present
-if [ -f yarn.lock ] || [ -f package-lock.json ]; then
-    bun install && rm -f bun.lock bun.lockb || true
-fi
+# JS deps are intentionally NOT installed here — clone time stays uniform and fast,
+# most clones never run the JS app, and when deps ARE needed the project's own
+# package manager (pnpm/yarn/npm) installs them then, faithful to its lockfile.
+# (Python is different: step 4 symlinks the shared .venv, so its deps are free.)
 
-# 6. Eagerly start a primed Claude tmux session so opening the project later just
+# 5. Eagerly start a primed Claude tmux session so opening the project later just
 #    attaches to an already-booted Claude (same as fork). Fork/promote carry the
 #    source conversation across and resume it; a plain clone starts a fresh Claude.
 # NOTE: no "=" in -s — that's exact-match syntax for -t TARGETS only; in -s it
@@ -172,12 +177,12 @@ fi
 tmux new-session -d -s "$sessionName" -c "$TARGET_DIR" \
     bash -lic "$claudeCmd; exec bash -l" 2>/dev/null || true
 
-# 7. Kill investigation tmux session (promote only)
+# 6. Kill investigation tmux session (promote only)
 if [ -n "$INV_SESSION_TO_KILL" ]; then
     tmux kill-session -t "=$INV_SESSION_TO_KILL" 2>/dev/null || true
 fi
 
-# 8. Detect repo name from the upstream remote URL (origin was already repointed
+# 7. Detect repo name from the upstream remote URL (origin was already repointed
 #    to upstream in step 2).
 _repoUrl=$(git remote get-url origin 2>/dev/null || echo "")
 _repoName=$(echo "$_repoUrl" | sed -E 's|.*[:/][^/]+/([^/.]+)(\.git)?[[:space:]]*$|\1|')
@@ -191,7 +196,7 @@ if [ -n "$_repoName" ]; then
     esac
 fi
 
-# 9. Write pending file — signals the extension that the project is ready
+# 8. Write pending file — signals the extension that the project is ready
 mkdir -p "$(dirname "$PENDING_FILE")"
 if [ -n "$KIND" ]; then
     printf '{"name":"%s","rootPath":"%s","repoName":"%s","kind":"%s"}' \
